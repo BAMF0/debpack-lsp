@@ -8,7 +8,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	glspserver "github.com/tliron/glsp/server"
 	"github.com/yourusername/debpack-lsp/bugs"
-	"github.com/yourusername/debpack-lsp/debian"
+	"github.com/yourusername/debpack-lsp/debpkg"
 	"github.com/yourusername/debpack-lsp/debhelper"
 
 	"sync"
@@ -125,11 +125,11 @@ func (s *Server) didClose(_ *glsp.Context, params *protocol.DidCloseTextDocument
 // the lpad cache for that package. It is called whenever a new document is
 // opened so that the first changelog file encountered triggers the load.
 func (s *Server) maybeLoadBugs(uri, text string) {
-	ft := debian.FileTypeFromURI(uri)
-	if ft != debian.FileTypeChangelog {
+	ft := debpkg.FileTypeFromURI(uri)
+	if ft != debpkg.FileTypeChangelog {
 		return
 	}
-	pkg := debian.PackageFromChangelog(text)
+	pkg := debpkg.PackageFromChangelog(text)
 	if pkg == "" {
 		return
 	}

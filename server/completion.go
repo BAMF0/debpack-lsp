@@ -8,7 +8,7 @@ import (
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/yourusername/debpack-lsp/debian"
+	"github.com/yourusername/debpack-lsp/debpkg"
 )
 
 func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, error) {
@@ -18,21 +18,21 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 		return nil, nil
 	}
 
-	ft := debian.FileTypeFromURI(uri)
+	ft := debpkg.FileTypeFromURI(uri)
 	lineUpTo := lineUpToCursor(text, int(params.Position.Line), int(params.Position.Character))
 
 	switch ft {
-	case debian.FileTypeChangelog:
+	case debpkg.FileTypeChangelog:
 		return s.changelogCompletions(lineUpTo), nil
-	case debian.FileTypeControl:
+	case debpkg.FileTypeControl:
 		return s.controlCompletions(text, lineUpTo, int(params.Position.Line)), nil
-	case debian.FileTypeRules:
+	case debpkg.FileTypeRules:
 		return s.rulesCompletions(lineUpTo), nil
-	case debian.FileTypeCopyright:
+	case debpkg.FileTypeCopyright:
 		return s.copyrightCompletions(lineUpTo), nil
-	case debian.FileTypePatch:
+	case debpkg.FileTypePatch:
 		return s.patchCompletions(lineUpTo), nil
-	case debian.FileTypeWatch:
+	case debpkg.FileTypeWatch:
 		return s.watchCompletions(lineUpTo), nil
 	}
 	return nil, nil
@@ -43,7 +43,7 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 // ---------------------------------------------------------------------------
 
 func (s *Server) changelogCompletions(lineUpTo string) []protocol.CompletionItem {
-	prefix, digits := debian.BugRefAtCursor(lineUpTo)
+	prefix, digits := debpkg.BugRefAtCursor(lineUpTo)
 	if prefix == "" {
 		return nil
 	}
@@ -88,17 +88,17 @@ func (s *Server) changelogCompletions(lineUpTo string) []protocol.CompletionItem
 
 func (s *Server) controlCompletions(fullText, lineUpTo string, lineIdx int) []protocol.CompletionItem {
 	// If the cursor is before ':', complete field names.
-	if fieldPrefix := debian.FieldAtCursor(lineUpTo); fieldPrefix != "" {
+	if fieldPrefix := debpkg.FieldAtCursor(lineUpTo); fieldPrefix != "" {
 		return controlFieldNameItems(fieldPrefix)
 	}
 
 	// Otherwise complete field values.
 	fullLine := fullLineAt(fullText, lineIdx)
-	fieldName := debian.FieldNameFromLine(fullLine)
+	fieldName := debpkg.FieldNameFromLine(fullLine)
 	if fieldName == "" {
 		return nil
 	}
-	f := debian.LookupField(fieldName)
+	f := debpkg.LookupField(fieldName)
 	if f == nil || len(f.Values) == 0 {
 		return nil
 	}
@@ -108,7 +108,7 @@ func (s *Server) controlCompletions(fullText, lineUpTo string, lineIdx int) []pr
 func controlFieldNameItems(prefix string) []protocol.CompletionItem {
 	lower := strings.ToLower(prefix)
 	var items []protocol.CompletionItem
-	for _, f := range debian.KnownControlFields {
+	for _, f := range debpkg.KnownControlFields {
 		if !strings.HasPrefix(strings.ToLower(f.Name), lower) {
 			continue
 		}
@@ -162,10 +162,10 @@ func (s *Server) rulesCompletions(lineUpTo string) []protocol.CompletionItem {
 // ---------------------------------------------------------------------------
 
 func (s *Server) copyrightCompletions(lineUpTo string) []protocol.CompletionItem {
-	if fieldPrefix := debian.FieldAtCursor(lineUpTo); fieldPrefix != "" {
+	if fieldPrefix := debpkg.FieldAtCursor(lineUpTo); fieldPrefix != "" {
 		lower := strings.ToLower(fieldPrefix)
 		var items []protocol.CompletionItem
-		for _, f := range debian.KnownCopyrightFields {
+		for _, f := range debpkg.KnownCopyrightFields {
 			if !strings.HasPrefix(strings.ToLower(f.Name), lower) {
 				continue
 			}
@@ -188,7 +188,7 @@ func (s *Server) copyrightCompletions(lineUpTo string) []protocol.CompletionItem
 
 func licenseValues() []string {
 	var vals []string
-	for _, f := range debian.KnownCopyrightFields {
+	for _, f := range debpkg.KnownCopyrightFields {
 		if strings.ToLower(f.Name) == "license" {
 			return f.Values
 		}
@@ -201,10 +201,10 @@ func licenseValues() []string {
 // ---------------------------------------------------------------------------
 
 func (s *Server) patchCompletions(lineUpTo string) []protocol.CompletionItem {
-	fieldPrefix := debian.FieldAtCursor(lineUpTo)
+	fieldPrefix := debpkg.FieldAtCursor(lineUpTo)
 	lower := strings.ToLower(fieldPrefix)
 	var items []protocol.CompletionItem
-	for _, f := range debian.KnownPatchFields {
+	for _, f := range debpkg.KnownPatchFields {
 		if !strings.HasPrefix(strings.ToLower(f.Name), lower) {
 			continue
 		}
@@ -224,11 +224,11 @@ func (s *Server) patchCompletions(lineUpTo string) []protocol.CompletionItem {
 // ---------------------------------------------------------------------------
 
 func (s *Server) watchCompletions(lineUpTo string) []protocol.CompletionItem {
-	if !debian.IsInOpts(lineUpTo) {
+	if !debpkg.IsInOpts(lineUpTo) {
 		return nil
 	}
 	var items []protocol.CompletionItem
-	for _, f := range debian.KnownWatchOptions {
+	for _, f := range debpkg.KnownWatchOptions {
 		kind := protocol.CompletionItemKindProperty
 		items = append(items, protocol.CompletionItem{
 			Label:  f.Name,

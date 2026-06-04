@@ -8,7 +8,7 @@ import (
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/yourusername/debpack-lsp/bugs"
-	"github.com/yourusername/debpack-lsp/debian"
+	"github.com/yourusername/debpack-lsp/debpkg"
 	"github.com/yourusername/debpack-lsp/debhelper"
 )
 
@@ -19,22 +19,22 @@ func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protoc
 		return nil, nil
 	}
 
-	ft := debian.FileTypeFromURI(uri)
+	ft := debpkg.FileTypeFromURI(uri)
 	line := int(params.Position.Line)
 	col := int(params.Position.Character)
 	fullLine := fullLineAt(text, line)
 	offset := lineColToByteOffset(text, line, col)
 
 	switch ft {
-	case debian.FileTypeChangelog:
+	case debpkg.FileTypeChangelog:
 		return s.hoverBugRef(text, fullLine, offset)
-	case debian.FileTypeControl:
+	case debpkg.FileTypeControl:
 		return s.hoverControlField(fullLine)
-	case debian.FileTypeRules:
+	case debpkg.FileTypeRules:
 		return s.hoverDhCommand(fullLine, col)
-	case debian.FileTypeCopyright:
+	case debpkg.FileTypeCopyright:
 		return s.hoverCopyrightField(fullLine)
-	case debian.FileTypePatch:
+	case debpkg.FileTypePatch:
 		return s.hoverPatchField(fullLine)
 	}
 	return nil, nil
@@ -45,7 +45,7 @@ func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protoc
 // ---------------------------------------------------------------------------
 
 func (s *Server) hoverBugRef(text, line string, offset int) (*protocol.Hover, error) {
-	idStr := debian.BugNumberAtOffset(text, offset)
+	idStr := debpkg.BugNumberAtOffset(text, offset)
 	if idStr == "" {
 		return nil, nil
 	}
@@ -66,11 +66,11 @@ func (s *Server) hoverBugRef(text, line string, offset int) (*protocol.Hover, er
 // ---------------------------------------------------------------------------
 
 func (s *Server) hoverControlField(line string) (*protocol.Hover, error) {
-	name := debian.FieldNameFromLine(line)
+	name := debpkg.FieldNameFromLine(line)
 	if name == "" {
 		return nil, nil
 	}
-	f := debian.LookupField(name)
+	f := debpkg.LookupField(name)
 	if f == nil {
 		return nil, nil
 	}
@@ -102,11 +102,11 @@ func (s *Server) hoverDhCommand(line string, col int) (*protocol.Hover, error) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) hoverCopyrightField(line string) (*protocol.Hover, error) {
-	name := debian.FieldNameFromLine(line)
+	name := debpkg.FieldNameFromLine(line)
 	if name == "" {
 		return nil, nil
 	}
-	f := debian.LookupCopyrightField(name)
+	f := debpkg.LookupCopyrightField(name)
 	if f == nil {
 		return nil, nil
 	}
@@ -122,11 +122,11 @@ func (s *Server) hoverCopyrightField(line string) (*protocol.Hover, error) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) hoverPatchField(line string) (*protocol.Hover, error) {
-	name := debian.FieldNameFromLine(line)
+	name := debpkg.FieldNameFromLine(line)
 	if name == "" {
 		return nil, nil
 	}
-	f := debian.LookupPatchField(name)
+	f := debpkg.LookupPatchField(name)
 	if f == nil {
 		return nil, nil
 	}
