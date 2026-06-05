@@ -3,7 +3,7 @@ package server
 import (
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/yourusername/debpack-lsp/debpkg"
+	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 // publishDiagnostics lints the document at uri and pushes the results to the

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/yourusername/debpack-lsp/bugs"
+	"github.com/BAMF0/debpack-lsp/bugs"
 )
 
 // writeLpadCache writes a minimal lpad-format cache file to a temp directory

@@ -3,7 +3,7 @@ package debpkg_test
 import (
 	"testing"
 
-	"github.com/yourusername/debpack-lsp/debpkg"
+	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 func TestFileTypeFromURI(t *testing.T) {

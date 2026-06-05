@@ -7,9 +7,9 @@ import (
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/yourusername/debpack-lsp/bugs"
-	"github.com/yourusername/debpack-lsp/debpkg"
-	"github.com/yourusername/debpack-lsp/debhelper"
+	"github.com/BAMF0/debpack-lsp/bugs"
+	"github.com/BAMF0/debpack-lsp/debpkg"
+	"github.com/BAMF0/debpack-lsp/debhelper"
 )
 
 func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/yourusername/debpack-lsp/debpkg"
+	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, error) {
@@ -23,7 +23,7 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 
 	switch ft {
 	case debpkg.FileTypeChangelog:
-		return s.changelogCompletions(lineUpTo), nil
+		return s.changelogCompletions(lineUpTo, text, int(params.Position.Line), int(params.Position.Character)), nil
 	case debpkg.FileTypeControl:
 		return s.controlCompletions(text, lineUpTo, int(params.Position.Line)), nil
 	case debpkg.FileTypeRules:
@@ -42,17 +42,34 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 // changelog completions: bug number references
 // ---------------------------------------------------------------------------
 
-func (s *Server) changelogCompletions(lineUpTo string) []protocol.CompletionItem {
-	prefix, digits := debpkg.BugRefAtCursor(lineUpTo)
-	if prefix == "" {
-		return nil
+func (s *Server) changelogCompletions(lineUpTo, fullText string, lineNum, col int) []protocol.CompletionItem {
+	// Priority 1: cursor is inside an "LP: #" or "Closes: #" reference →
+	// complete the bug number (existing behaviour), filtering already-listed bugs.
+	if prefix, digits := debpkg.BugRefAtCursor(lineUpTo); prefix != "" {
+		return s.changelogNumberCompletions(lineUpTo, fullText, lineNum, digits)
 	}
 
+	// Priority 2: cursor is on a sub-bullet under a "* Fixes:" parent →
+	// complete the bug title and insert "title (LP: #N)".
+	if startCol, typedText, ok := debpkg.ChangelogFixesBulletAtLine(fullText, lineNum); ok {
+		return s.changelogTitleCompletions(fullText, typedText, lineNum, startCol, col)
+	}
+
+	return nil
+}
+
+// changelogNumberCompletions handles "LP: #<digits>" cursor context.
+// It completes the bug number, filtered against bugs already referenced in the
+// file and ranked by title similarity to the text preceding the trigger.
+func (s *Server) changelogNumberCompletions(lineUpTo, fullText string, lineNum int, digits string) []protocol.CompletionItem {
+	referenced := debpkg.BugNumbersInText(fullText)
 	allBugs := s.bugs.All()
 
-	// Rank by title similarity to the text already written on the line, falling
-	// back to recency (newest ID first) when there is no meaningful context.
-	queryTokens := debpkg.Tokenize(debpkg.ContextBeforeBugRef(lineUpTo))
+	// Rank by title similarity to the enriched context: text before LP: # on
+	// the current line, plus the nearest parent "  * <text>" bullet when the
+	// current line is a sparse sub-bullet.  Falls back to recency sort when
+	// the combined context yields no tokens.
+	queryTokens := debpkg.Tokenize(debpkg.ChangelogContextForBugRef(fullText, lineNum, lineUpTo))
 	if len(queryTokens) > 0 {
 		sort.SliceStable(allBugs, func(i, j int) bool {
 			si := debpkg.TitleSimilarity(queryTokens, allBugs[i].Title)
@@ -68,6 +85,9 @@ func (s *Server) changelogCompletions(lineUpTo string) []protocol.CompletionItem
 
 	var items []protocol.CompletionItem
 	for _, bug := range allBugs {
+		if referenced[bug.ID] {
+			continue
+		}
 		idStr := strconv.Itoa(bug.ID)
 		if digits != "" && !strings.HasPrefix(idStr, digits) {
 			continue
@@ -90,9 +110,53 @@ func (s *Server) changelogCompletions(lineUpTo string) []protocol.CompletionItem
 	return items
 }
 
-// ---------------------------------------------------------------------------
-// control completions: field names and values
-// ---------------------------------------------------------------------------
+// changelogTitleCompletions handles a sub-bullet line under "* Fixes:".
+// It suggests bug titles as labels and inserts "title (LP: #N)" via TextEdit,
+// replacing everything the user has typed since the "- ".
+func (s *Server) changelogTitleCompletions(fullText, typedText string, lineNum, startCol, col int) []protocol.CompletionItem {
+	referenced := debpkg.BugNumbersInText(fullText)
+	allBugs := s.bugs.All()
+
+	queryTokens := debpkg.Tokenize(typedText)
+	sort.SliceStable(allBugs, func(i, j int) bool {
+		si := debpkg.TitleSimilarity(queryTokens, allBugs[i].Title)
+		sj := debpkg.TitleSimilarity(queryTokens, allBugs[j].Title)
+		if si != sj {
+			return si > sj
+		}
+		return allBugs[i].ID > allBugs[j].ID
+	})
+
+	editRange := protocol.Range{
+		Start: protocol.Position{Line: uint32(lineNum), Character: uint32(startCol)},
+		End:   protocol.Position{Line: uint32(lineNum), Character: uint32(col)},
+	}
+
+	var items []protocol.CompletionItem
+	for _, bug := range allBugs {
+		if referenced[bug.ID] {
+			continue
+		}
+		bug := bug // capture
+		newText := fmt.Sprintf("%s (LP: #%d)", bug.Title, bug.ID)
+		detail := fmt.Sprintf("%s · %s", bug.Status, bug.Importance)
+		filterText := bug.Title
+		kind := protocol.CompletionItemKindText
+		items = append(items, protocol.CompletionItem{
+			Label:      bug.Title,
+			Kind:       &kind,
+			Detail:     &detail,
+			FilterText: &filterText,
+			TextEdit:   protocol.TextEdit{Range: editRange, NewText: newText},
+		})
+		if len(items) >= 50 {
+			break
+		}
+	}
+	return items
+}
+
+
 
 func (s *Server) controlCompletions(fullText, lineUpTo string, lineIdx int) []protocol.CompletionItem {
 	// If the cursor is before ':', complete field names.

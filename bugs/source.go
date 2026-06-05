@@ -8,7 +8,7 @@ package bugs
 import (
 	"sync"
 
-	ilog "github.com/yourusername/debpack-lsp/internal/log"
+	ilog "github.com/BAMF0/debpack-lsp/internal/log"
 )
 
 // Bug is the canonical bug representation used throughout debpack-lsp.

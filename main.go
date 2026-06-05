@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/yourusername/debpack-lsp/server"
+	"github.com/BAMF0/debpack-lsp/server"
 )
 
 var version = "dev"
