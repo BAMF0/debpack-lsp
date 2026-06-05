@@ -50,6 +50,7 @@ func New() *Server {
 		TextDocumentDidClose:   s.didClose,
 		TextDocumentCompletion: s.completion,
 		TextDocumentHover:      s.hover,
+		TextDocumentFormatting: s.format,
 	}
 
 	s.glsp = glspserver.NewServer(&s.handler, serverName, false)
