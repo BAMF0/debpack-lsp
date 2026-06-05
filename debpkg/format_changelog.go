@@ -58,10 +58,21 @@ func FormatChangelog(text string) string {
 		if m := bulletLineRe.FindStringSubmatch(line); m != nil {
 			content := line[len(m[0]):]
 			switch m[2] { // bullet character
-			case "*", "+": // "+" is a non-standard top-level variant; normalise to "*"
+			case "*":
 				*contIndent = 4
 				return "  * " + content
-			default: // "-" → canonical sub-bullet
+			case "+":
+				// "+" is used both as a non-standard top-level variant (≤2 spaces
+				// of source indentation) and as the canonical third-level bullet
+				// (≥3 spaces, i.e. after a "    - " sub-bullet).  Distinguish by
+				// source indent so we don't collapse level-3 bullets into level 1.
+				if len(m[1]) <= 2 {
+					*contIndent = 4
+					return "  * " + content
+				}
+				*contIndent = 8
+				return "      + " + content
+			default: // "-" → canonical level-2 sub-bullet
 				*contIndent = 6
 				return "    - " + content
 			}

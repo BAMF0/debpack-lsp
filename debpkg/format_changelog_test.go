@@ -214,6 +214,63 @@ func TestFormatChangelog_ContributorBlock(t *testing.T) {
 	}
 }
 
+func TestFormatChangelog_ThirdLevel(t *testing.T) {
+	// Canonical three-level structure must be idempotent.
+	canonical := `mypkg (1.0) unstable; urgency=medium
+
+  * Top-level bullet
+    - Second-level bullet
+      + Third-level bullet
+        Continuation of third-level.
+    - Another second-level
+
+ -- Dev <dev@example.com>  Mon, 01 Jan 2024 00:00:00 +0000
+`
+	if got := FormatChangelog(canonical); got != canonical {
+		t.Errorf("three-level idempotency failure:\nwant:\n%s\ngot:\n%s", canonical, got)
+	}
+
+	// Misindented third-level "+" bullets must be corrected to 6-space indent.
+	input := `mypkg (1.0) unstable; urgency=medium
+
+  * Top-level bullet
+    - Second-level bullet
+    + Misindented third-level (4 spaces instead of 6)
+       + Also misindented (7 spaces)
+
+ -- Dev <dev@example.com>  Mon, 01 Jan 2024 00:00:00 +0000
+`
+	want := `mypkg (1.0) unstable; urgency=medium
+
+  * Top-level bullet
+    - Second-level bullet
+      + Misindented third-level (4 spaces instead of 6)
+      + Also misindented (7 spaces)
+
+ -- Dev <dev@example.com>  Mon, 01 Jan 2024 00:00:00 +0000
+`
+	if got := FormatChangelog(input); got != want {
+		t.Errorf("third-level normalisation:\nwant:\n%s\ngot:\n%s", want, got)
+	}
+
+	// A "+" at ≤2 spaces of indentation is a top-level variant and must become "  * ".
+	inputTopLevel := `mypkg (1.0) unstable; urgency=medium
+
+  + Top-level plus sign
+
+ -- Dev <dev@example.com>  Mon, 01 Jan 2024 00:00:00 +0000
+`
+	wantTopLevel := `mypkg (1.0) unstable; urgency=medium
+
+  * Top-level plus sign
+
+ -- Dev <dev@example.com>  Mon, 01 Jan 2024 00:00:00 +0000
+`
+	if got := FormatChangelog(inputTopLevel); got != wantTopLevel {
+		t.Errorf("top-level + normalisation:\nwant:\n%s\ngot:\n%s", wantTopLevel, got)
+	}
+}
+
 func TestFormatChangelog_WhitespaceOnlyBlankLines(t *testing.T) {
 	// Blank lines that contain only spaces must be collapsed to truly empty lines.
 	input := "mypkg (1.0) unstable; urgency=medium\n\n  * Change\n   \n -- Dev <dev@example.com>  Mon, 01 Jan 2024 00:00:00 +0000\n"
