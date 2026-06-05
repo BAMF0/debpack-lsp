@@ -142,26 +142,9 @@ func (s *Server) hoverPatchField(line string) (*protocol.Hover, error) {
 // ---------------------------------------------------------------------------
 
 func bugMarkdown(bug bugs.Bug) string {
-	assignee := bug.Assignee
-	if assignee == "" {
-		assignee = "unassigned"
-	}
-	tags := strings.Join(bug.Tags, ", ")
-	if tags == "" {
-		tags = "none"
-	}
 	return fmt.Sprintf(
-		"**LP: #%d** — %s\n\n"+
-			"| Field | Value |\n"+
-			"|---|---|\n"+
-			"| Status | %s |\n"+
-			"| Importance | %s |\n"+
-			"| Assignee | %s |\n"+
-			"| Tags | %s |\n"+
-			"| URL | [%s](%s) |",
-		bug.ID, bug.Title,
-		bug.Status, bug.Importance, assignee, tags,
-		bug.URL, bug.URL,
+		"**LP: #%d** — %s\n\n%s · %s",
+		bug.ID, bug.Title, bug.Status, bug.Importance,
 	)
 }
 

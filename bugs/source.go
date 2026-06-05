@@ -6,8 +6,9 @@
 package bugs
 
 import (
-	"fmt"
 	"sync"
+
+	ilog "github.com/yourusername/debpack-lsp/internal/log"
 )
 
 // Bug is the canonical bug representation used throughout debpack-lsp.
@@ -63,13 +64,15 @@ func (s *Store) Load(pkg string) {
 	defer s.mu.Unlock()
 
 	s.bugs = make(map[int]*Bug)
+	ilog.Logf("debpack-lsp: loading bugs for package %q\n", pkg)
 	for _, src := range s.sources {
 		bugs, err := src.Bugs(pkg)
 		if err != nil {
-			// Non-fatal: log to stderr and continue with other sources.
-			fmt.Printf("debpack-lsp: [%s] load error: %v\n", src.Name(), err)
+			// Non-fatal: log and continue with other sources.
+			ilog.Logf("debpack-lsp: [%s] load error: %v\n", src.Name(), err)
 			continue
 		}
+		ilog.Logf("debpack-lsp: [%s] loaded %d bugs\n", src.Name(), len(bugs))
 		for i := range bugs {
 			b := &bugs[i]
 			s.bugs[b.ID] = b

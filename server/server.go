@@ -24,6 +24,7 @@ type Server struct {
 	bugs     *bugs.Store
 	dh       *debhelper.Store
 	pkg      string // detected source package name
+	isUbuntu bool   // true when the changelog version contains "ubuntu"
 	pkgMu    sync.RWMutex
 }
 
@@ -101,19 +102,27 @@ func (s *Server) shutdown(_ *glsp.Context) error {
 // Document sync handlers
 // ---------------------------------------------------------------------------
 
-func (s *Server) didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-	s.docs.open(params.TextDocument.URI, params.TextDocument.Text)
-	s.maybeLoadBugs(params.TextDocument.URI, params.TextDocument.Text)
+func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+	uri := params.TextDocument.URI
+	text := params.TextDocument.Text
+	s.docs.open(uri, text)
+	s.maybeLoadBugs(uri, text)
+	s.publishDiagnostics(ctx, uri, text)
 	return nil
 }
 
-func (s *Server) didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
-	s.docs.applyChanges(params.TextDocument.URI, params.ContentChanges)
+func (s *Server) didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
+	uri := params.TextDocument.URI
+	s.docs.applyChanges(uri, params.ContentChanges)
+	if text, ok := s.docs.get(uri); ok {
+		s.publishDiagnostics(ctx, uri, text)
+	}
 	return nil
 }
 
-func (s *Server) didClose(_ *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
+func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
 	s.docs.close(params.TextDocument.URI)
+	s.clearDiagnostics(ctx, params.TextDocument.URI)
 	return nil
 }
 
@@ -135,6 +144,7 @@ func (s *Server) maybeLoadBugs(uri, text string) {
 	}
 	s.pkgMu.Lock()
 	s.pkg = pkg
+	s.isUbuntu = debpkg.IsUbuntuChangelog(text)
 	s.pkgMu.Unlock()
 	go s.bugs.Load(pkg)
 }

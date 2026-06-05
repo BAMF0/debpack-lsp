@@ -46,6 +46,9 @@ var KnownControlFields = []ControlField{
 	{Name: "Description", Description: "Short and long description of the package."},
 	{Name: "Essential", Description: "Whether this is an essential package.", Values: []string{"yes", "no"}},
 	{Name: "Installed-Size", Description: "Approximate installed size in KiB."},
+	{Name: "Built-Using", Description: "Additional source packages used to build this binary."},
+	{Name: "Package-Type", Description: "Type of the package (deb or udeb).", Values: []string{"deb", "udeb"}},
+	{Name: "Build-Profiles", Description: "Build profiles that restrict when the package is built."},
 	{Name: "Tag", Description: "Debtags for the package."},
 	{Name: "XB-Maemo-Icon-26", Description: "Maemo application icon."},
 }

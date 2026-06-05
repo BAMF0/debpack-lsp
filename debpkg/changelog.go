@@ -8,6 +8,9 @@ import (
 // firstLineRe matches: "packagename (version) suite; urgency=..."
 var firstLineRe = regexp.MustCompile(`^(\S+)\s+\(`)
 
+// firstVersionRe captures both the package name and the version string.
+var firstVersionRe = regexp.MustCompile(`^(\S+)\s+\(([^)]+)\)`)
+
 // PackageFromChangelog extracts the source package name from the first line
 // of a debian/changelog file. Returns "" if not found.
 func PackageFromChangelog(text string) string {
@@ -17,6 +20,18 @@ func PackageFromChangelog(text string) string {
 		return ""
 	}
 	return m[1]
+}
+
+// IsUbuntuChangelog reports whether the package version in the first changelog
+// entry contains the string "ubuntu" (case-insensitive), indicating an Ubuntu
+// upload.  This is used to drive the Ubuntu Maintainer check in control files.
+func IsUbuntuChangelog(text string) bool {
+	line, _, _ := strings.Cut(text, "\n")
+	m := firstVersionRe.FindStringSubmatch(line)
+	if m == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(m[2]), "ubuntu")
 }
 
 // bugRefRe matches "LP: #" or "Closes: #" followed by optional digits.

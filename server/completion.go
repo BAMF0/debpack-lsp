@@ -58,22 +58,15 @@ func (s *Server) changelogCompletions(lineUpTo string) []protocol.CompletionItem
 			continue
 		}
 		label := idStr
-		detail := fmt.Sprintf("[%s] %s", bug.Status, bug.Title)
-		doc := bugMarkdown(bug)
+		detail := bug.Title
+		doc := fmt.Sprintf("%s · %s", bug.Status, bug.Importance)
 		kind := protocol.CompletionItemKindValue
 		items = append(items, protocol.CompletionItem{
 			Label:         label,
 			Kind:          &kind,
 			Detail:        &detail,
 			Documentation: &protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: doc},
-			// Replace the digits already typed.
-			TextEdit: &protocol.TextEdit{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 0, Character: 0}, // filled by client
-					End:   protocol.Position{Line: 0, Character: 0},
-				},
-				NewText: idStr,
-			},
+			InsertText:    &idStr,
 		})
 		if len(items) >= 50 {
 			break
