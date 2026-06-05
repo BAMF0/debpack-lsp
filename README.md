@@ -8,7 +8,7 @@ directory.
 
 ### Completions
 - **`debian/changelog`** — `LP: #` / `Closes: #` bug number completion from
-  the local lpad cache, ranked by title similarity to the description already
+  the local [lpad](https://github.com/BAMF0/lpad) cache, ranked by title similarity to the description already
   written on the line
 - **`debian/control`** — field names and enumerated values
 - **`debian/rules`** — `dh_*` command names (scraped from installed man pages)
