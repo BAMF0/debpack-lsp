@@ -1,4 +1,4 @@
-module github.com/yourusername/debpack-lsp
+module github.com/BAMF0/debpack-lsp
 
 go 1.25.0
 

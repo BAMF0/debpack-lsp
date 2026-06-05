@@ -49,7 +49,22 @@ func (s *Server) changelogCompletions(lineUpTo string) []protocol.CompletionItem
 	}
 
 	allBugs := s.bugs.All()
-	sort.Slice(allBugs, func(i, j int) bool { return allBugs[i].ID > allBugs[j].ID })
+
+	// Rank by title similarity to the text already written on the line, falling
+	// back to recency (newest ID first) when there is no meaningful context.
+	queryTokens := debpkg.Tokenize(debpkg.ContextBeforeBugRef(lineUpTo))
+	if len(queryTokens) > 0 {
+		sort.SliceStable(allBugs, func(i, j int) bool {
+			si := debpkg.TitleSimilarity(queryTokens, allBugs[i].Title)
+			sj := debpkg.TitleSimilarity(queryTokens, allBugs[j].Title)
+			if si != sj {
+				return si > sj
+			}
+			return allBugs[i].ID > allBugs[j].ID
+		})
+	} else {
+		sort.Slice(allBugs, func(i, j int) bool { return allBugs[i].ID > allBugs[j].ID })
+	}
 
 	var items []protocol.CompletionItem
 	for _, bug := range allBugs {

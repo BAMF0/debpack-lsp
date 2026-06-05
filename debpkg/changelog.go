@@ -65,3 +65,15 @@ func BugNumberAtOffset(text string, offset int) string {
 	}
 	return ""
 }
+
+// ContextBeforeBugRef returns the portion of lineUpToCursor that precedes the
+// LP: # / Closes: # trigger.  This text is used as a query when ranking bug
+// completions by title similarity.  Returns "" when no bug-ref trigger is
+// present on the line.
+func ContextBeforeBugRef(lineUpToCursor string) string {
+	loc := bugRefRe.FindStringIndex(lineUpToCursor)
+	if loc == nil {
+		return ""
+	}
+	return lineUpToCursor[:loc[0]]
+}

@@ -4,14 +4,14 @@
 -- Installation (packer):
 --
 --   use {
---     "yourusername/debpack-lsp",
+--     "BAMF0/debpack-lsp",
 --     run = "make install",
 --     config = function() require("debpack-lsp").setup() end,
 --   }
 --
 -- Installation (lazy.nvim):
 --
---   { "yourusername/debpack-lsp", build = "make install", config = true }
+--   { "BAMF0/debpack-lsp", build = "make install", config = true }
 --
 -- The plugin uses vim.lsp.start directly (no nvim-lspconfig required).
 
@@ -67,7 +67,7 @@ local function attach(args)
   local bin = find_binary()
   if not bin then
     vim.notify(
-      "debpack-lsp: binary not found. Install it with:\n  go install github.com/yourusername/debpack-lsp@latest",
+      "debpack-lsp: binary not found. Install it with:\n  go install github.com/BAMF0/debpack-lsp@latest",
       vim.log.levels.WARN
     )
     return
