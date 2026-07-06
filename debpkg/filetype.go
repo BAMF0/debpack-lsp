@@ -38,7 +38,6 @@ func FileTypeFromURI(uri string) FileType {
 	p = path.Clean(p)
 	base := path.Base(p)
 	dir := path.Base(path.Dir(p))
-	grandParent := path.Base(path.Dir(path.Dir(p)))
 
 	switch {
 	case base == "control" && dir == "debian":
@@ -51,7 +50,7 @@ func FileTypeFromURI(uri string) FileType {
 		return FileTypeWatch
 	case base == "copyright" && dir == "debian":
 		return FileTypeCopyright
-	case dir == "patches" && (grandParent == "debian"):
+	case isInDebianPatches(p) && base != "series":
 		return FileTypePatch
 	case strings.HasSuffix(base, ".install") && dir == "debian":
 		return FileTypeInstall
@@ -65,6 +64,20 @@ func FileTypeFromURI(uri string) FileType {
 		return FileTypeManpages
 	}
 	return FileTypeUnknown
+}
+
+// isInDebianPatches reports whether p lies anywhere under a
+// .../debian/patches/ directory (including nested subdirectories such as
+// debian/patches/ubuntu/foo.patch).
+func isInDebianPatches(p string) bool {
+	d := path.Dir(p)
+	for d != "/" && d != "." {
+		if path.Base(d) == "patches" {
+			return path.Base(path.Dir(d)) == "debian"
+		}
+		d = path.Dir(d)
+	}
+	return false
 }
 
 func (ft FileType) String() string {

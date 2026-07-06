@@ -25,19 +25,25 @@ var KnownCopyrightFields = []CopyrightField{
 }
 
 var knownSPDXLicenses = []string{
-	"Apache-2.0", "Artistic", "BSD-2-Clause", "BSD-3-Clause",
-	"CC-BY-4.0", "CC-BY-SA-4.0", "CC0-1.0",
-	"CDDL-1.0", "CPL-1.0",
-	"EPL-1.0", "EPL-2.0",
-	"Expat", "GPL-1.0-only", "GPL-1.0-or-later",
-	"GPL-2.0-only", "GPL-2.0-or-later",
-	"GPL-3.0-only", "GPL-3.0-or-later",
-	"LGPL-2.0-only", "LGPL-2.0-or-later",
-	"LGPL-2.1-only", "LGPL-2.1-or-later",
-	"LGPL-3.0-only", "LGPL-3.0-or-later",
-	"ISC", "LGPL-2.1", "MIT", "MPL-1.1", "MPL-2.0",
-	"Perl", "PSF-2.0", "public-domain",
-	"Unlicense", "WTFPL", "Zlib",
+	"Apache-2.0", "Artistic", "Artistic-1.0", "Artistic-2.0",
+	"BSD-2-Clause", "BSD-3-Clause", "BSD-4-Clause",
+	"BSL-1.0", "CC-BY-3.0", "CC-BY-4.0", "CC-BY-SA-3.0", "CC-BY-SA-4.0",
+	"CC-BY-NC-3.0", "CC-BY-NC-4.0", "CC-BY-NC-SA-4.0",
+	"CC0-1.0", "CDDL-1.0", "CDDL-1.1", "CPL-1.0",
+	"EPL-1.0", "EPL-2.0", "Expat", "MIT",
+	"FSFAP", "FTL", "GFDL-1.1", "GFDL-1.2", "GFDL-1.3",
+	"GPL-1.0", "GPL-1.0-only", "GPL-1.0-or-later",
+	"GPL-2.0", "GPL-2.0-only", "GPL-2.0-or-later",
+	"GPL-2+", "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later",
+	"GPL-3+", "ISC", "LGPL-2.0", "LGPL-2.0-only", "LGPL-2.0-or-later",
+	"LGPL-2.1", "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-2+",
+	"LGPL-3.0", "LGPL-3.0-only", "LGPL-3.0-or-later", "LGPL-3+",
+	"MPL-1.0", "MPL-1.1", "MPL-2.0",
+	"OFL-1.0", "OFL-1.1", "OpenSSL", "Perl", "PSF-2.0",
+	"Python-2.0", "Ruby", "SSPL-1.0",
+	"UPL-1.0", "Unlicense", "Vim", "WTFPL",
+	"X11", "Zlib", "ZPL-2.0", "ZPL-2.1",
+	"public-domain",
 }
 
 // LookupCopyrightField returns the CopyrightField for name (case-insensitive).

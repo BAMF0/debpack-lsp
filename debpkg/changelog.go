@@ -35,15 +35,39 @@ func IsUbuntuChangelog(text string) bool {
 	return strings.Contains(strings.ToLower(m[2]), "ubuntu")
 }
 
-// bugRefRe matches "LP: #" or "Closes: #" followed by optional digits.
-// Used to detect when the user is typing a bug reference.
-var bugRefRe = regexp.MustCompile(`(?i)(lp:\s*#|closes:\s*#)(\d*)$`)
+// bugRefRe matches "LP: #" followed by optional digits. It is used to detect
+// when the user is typing a Launchpad bug reference. "Closes: #" is matched
+// separately (see closesRefRe) because it targets the Debian BTS, which is
+// not yet implemented — completion is intentionally disabled for it so that
+// Debian users are not offered Launchpad bugs.
+var bugRefRe = regexp.MustCompile(`(?i)(lp:\s*#)(\d*)$`)
 
-// BugRefAtCursor returns the bug-reference prefix ("LP: #" or "Closes: #")
-// and the digits typed so far (may be empty) when the cursor is in a bug
-// reference context. Returns ("", "") otherwise.
+// closesRefRe matches "Closes: #" followed by optional digits. It is tracked
+// for filtering and hover routing, but does not trigger bug-number
+// completion (see BugRefAtCursor).
+var closesRefRe = regexp.MustCompile(`(?i)(closes:\s*#)(\d*)$`)
+
+// BugRefAtCursor returns the bug-reference prefix ("LP: #") and the digits
+// typed so far (may be empty) when the cursor is inside a Launchpad bug
+// reference. Returns ("", "") otherwise.
+//
+// "Closes: #" (the Debian BTS convention) deliberately returns ("", ""):
+// the Debian BTS backend is not yet implemented, so offering Launchpad bug
+// completions there would be silently wrong.
 func BugRefAtCursor(lineUpToCursor string) (prefix, digits string) {
 	m := bugRefRe.FindStringSubmatch(lineUpToCursor)
+	if m == nil {
+		return "", ""
+	}
+	return m[1], m[2]
+}
+
+// ClosesRefAtCursor returns the "Closes: #" prefix and digits typed so far
+// when the cursor is inside a Debian BTS bug reference. Returns ("", "")
+// otherwise. Used by hover to route to a Debian-BTS-specific message rather
+// than the Launchpad store.
+func ClosesRefAtCursor(lineUpToCursor string) (prefix, digits string) {
+	m := closesRefRe.FindStringSubmatch(lineUpToCursor)
 	if m == nil {
 		return "", ""
 	}
@@ -65,6 +89,25 @@ func BugNumberAtOffset(text string, offset int) string {
 		}
 	}
 	return ""
+}
+
+// closesNumberRe matches a complete "Closes: #N" reference.
+var closesNumberRe = regexp.MustCompile(`(?i)(closes:\s*#)(\d+)`)
+
+// ClosesRefAtOffset returns the "Closes: #" prefix and bug ID when the given
+// byte offset falls inside a Debian BTS ("Closes: #N") reference. Returns
+// ("", "") otherwise. Used by hover to route to a Debian-BTS-specific
+// message instead of the (Launchpad-only) bug store.
+func ClosesRefAtOffset(text string, offset int) (prefix, id string) {
+	for _, loc := range closesNumberRe.FindAllStringIndex(text, -1) {
+		if offset >= loc[0] && offset <= loc[1] {
+			m := closesNumberRe.FindStringSubmatch(text[loc[0]:loc[1]])
+			if m != nil {
+				return m[1], m[2]
+			}
+		}
+	}
+	return "", ""
 }
 
 // ContextBeforeBugRef returns the portion of lineUpToCursor that precedes the

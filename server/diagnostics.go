@@ -17,12 +17,19 @@ func (s *Server) publishDiagnostics(ctx *glsp.Context, uri, text string) {
 
 	raw := debpkg.Lint(text, ft, lctx)
 
-	source := "debpack-lsp"
+	// Cross-file checks (debhelper-compat vs debian/compat, quilt series, …).
+	raw = append(raw, s.crossFileDiagnostics(ft, text)...)
+
+	defaultSource := "debpack-lsp"
 	lspDiags := make([]protocol.Diagnostic, 0, len(raw))
 	for _, d := range raw {
 		d := d
 		sev := protocol.DiagnosticSeverity(d.Severity)
-		lspDiags = append(lspDiags, protocol.Diagnostic{
+		src := d.Source
+		if src == "" {
+			src = defaultSource
+		}
+		diag := protocol.Diagnostic{
 			Range: protocol.Range{
 				Start: protocol.Position{
 					Line:      uint32(d.Line),
@@ -34,9 +41,14 @@ func (s *Server) publishDiagnostics(ctx *glsp.Context, uri, text string) {
 				},
 			},
 			Severity: &sev,
-			Source:   &source,
+			Source:   &src,
 			Message:  d.Message,
-		})
+		}
+		if d.Code != "" {
+			code := protocol.IntegerOrString{Value: d.Code}
+			diag.Code = &code
+		}
+		lspDiags = append(lspDiags, diag)
 	}
 
 	ctx.Notify(

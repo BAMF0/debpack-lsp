@@ -1,6 +1,7 @@
 package server
 
 import (
+	"strings"
 	"sync"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -90,13 +91,26 @@ func splitLines(s string) []string {
 	return lines
 }
 
+// lineColToOffset converts a line/character position (as reported by the LSP
+// client) to a byte offset in the original text. The character column is a
+// UTF-16/rune count and is converted to a byte offset within the target line.
 func lineColToOffset(lines []string, line, col int) int {
 	off := 0
 	for i, l := range lines {
 		if i == line {
-			return off + col
+			return off + colToByteOffset(stripTrailingNewline(l), col)
 		}
 		off += len(l)
 	}
 	return off
+}
+
+// stripTrailingNewline removes a single trailing "\n" (and optional "\r")
+// from a line produced by splitLines, so that colToByteOffset (defined in
+// completion.go) operates on the line content only.
+func stripTrailingNewline(l string) string {
+	s := l
+	s = strings.TrimSuffix(s, "\n")
+	s = strings.TrimSuffix(s, "\r")
+	return s
 }

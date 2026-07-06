@@ -31,7 +31,7 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 	case debpkg.FileTypeCopyright:
 		return s.copyrightCompletions(lineUpTo), nil
 	case debpkg.FileTypePatch:
-		return s.patchCompletions(lineUpTo), nil
+		return s.patchCompletions(lineUpTo, text, s.snippetsSupported), nil
 	case debpkg.FileTypeWatch:
 		return s.watchCompletions(lineUpTo), nil
 	}
@@ -272,10 +272,18 @@ func licenseValues() []string {
 // patch completions (DEP-3)
 // ---------------------------------------------------------------------------
 
-func (s *Server) patchCompletions(lineUpTo string) []protocol.CompletionItem {
+func (s *Server) patchCompletions(lineUpTo, fullText string, snippetsSupported bool) []protocol.CompletionItem {
+	var items []protocol.CompletionItem
+
+	// Offer the full DEP-3 header snippet when the user is on a blank line
+	// and the file does not yet contain a recognised DEP-3 header block.
+	if strings.TrimSpace(lineUpTo) == "" && !debpkg.HasDep3Header(fullText) {
+		items = append(items, patchSnippetItems(snippetsSupported)...)
+	}
+
+	// Field-name completion (existing behaviour).
 	fieldPrefix := debpkg.FieldAtCursor(lineUpTo)
 	lower := strings.ToLower(fieldPrefix)
-	var items []protocol.CompletionItem
 	for _, f := range debpkg.KnownPatchFields {
 		if !strings.HasPrefix(strings.ToLower(f.Name), lower) {
 			continue
@@ -289,6 +297,56 @@ func (s *Server) patchCompletions(lineUpTo string) []protocol.CompletionItem {
 		})
 	}
 	return items
+}
+
+// patchHeaderSnippet is a single comprehensive DEP-3 patch header, using LSP
+// snippet syntax. Continuation lines start with a single space per DEP-3
+// convention (matches what lint_patch.go's parser accepts).
+const patchHeaderSnippet = `Description: ${1:short description}
+ ${2:longer explanation of what the patch does and why}
+Origin: ${3:upstream, https://example.com/commit}
+Forwarded: ${4:no}
+Author: ${5:Name <email@example.com>}
+Bug: ${6:https://example.com/bug}
+Last-Update: ${7:YYYY-MM-DD}
+$0`
+
+// patchHeaderPlain is the plain-text fallback for clients that do not
+// support LSP snippet syntax — placeholder markers are stripped so the
+// user gets a syntactically valid header they can edit by hand.
+const patchHeaderPlain = `Description: short description
+ longer explanation of what the patch does and why
+Origin: upstream, https://example.com/commit
+Forwarded: no
+Author: Name <email@example.com>
+Bug: https://example.com/bug
+Last-Update: YYYY-MM-DD
+`
+
+// patchSnippetItems returns the DEP-3 header snippet as completion items.
+// When the client does not support snippets, the plain-text variant is used
+// so the inserted text contains no ${1:...} markers.
+func patchSnippetItems(snippetsSupported bool) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindSnippet
+	detail := "Full DEP-3 patch header block"
+	if snippetsSupported {
+		format := protocol.InsertTextFormatSnippet
+		insert := patchHeaderSnippet
+		return []protocol.CompletionItem{{
+			Label:            "DEP-3 header",
+			Kind:             &kind,
+			Detail:           &detail,
+			InsertText:       &insert,
+			InsertTextFormat: &format,
+		}}
+	}
+	insert := patchHeaderPlain
+	return []protocol.CompletionItem{{
+		Label:      "DEP-3 header",
+		Kind:       &kind,
+		Detail:     &detail,
+		InsertText: &insert,
+	}}
 }
 
 // ---------------------------------------------------------------------------
@@ -321,10 +379,7 @@ func lineUpToCursor(text string, line, col int) string {
 		return ""
 	}
 	l := lines[line]
-	if col > len(l) {
-		col = len(l)
-	}
-	return l[:col]
+	return l[:colToByteOffset(l, col)]
 }
 
 func fullLineAt(text string, line int) string {
@@ -333,6 +388,27 @@ func fullLineAt(text string, line int) string {
 		return ""
 	}
 	return lines[line]
+}
+
+// colToByteOffset converts a 0-indexed character column (as reported by the
+// LSP client) to a byte offset within line. If col exceeds the number of
+// characters, the full line length is returned.
+//
+// Note: LSP 3.16 positions are UTF-16 code units; this function uses rune
+// counts, which match for BMP characters. Debian packaging files are
+// overwhelmingly ASCII/BMP, so this is sufficient in practice.
+func colToByteOffset(line string, col int) int {
+	if col <= 0 {
+		return 0
+	}
+	n := 0
+	for i := range line {
+		if n == col {
+			return i
+		}
+		n++
+	}
+	return len(line)
 }
 
 func stringsToCompletions(vals []string, kind protocol.CompletionItemKind) []protocol.CompletionItem {

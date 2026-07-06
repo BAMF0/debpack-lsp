@@ -19,7 +19,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	srv := server.New()
+	srv := server.New(version)
 	if err := srv.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "debpack-lsp: %v\n", err)
 		os.Exit(1)

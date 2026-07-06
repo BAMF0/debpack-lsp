@@ -80,13 +80,17 @@ func lintControl(text string, ctx LintContext) []Diag {
 
 	var diags []Diag
 	for i, s := range stanzas {
-		if i == 0 {
+		isSource := i == 0
+		if isSource {
 			diags = append(diags, lintSourceStanza(s, ctx)...)
 		} else {
 			diags = append(diags, lintBinaryStanza(s)...)
 		}
 		diags = append(diags, checkUnknownControlFields(s)...)
 		diags = append(diags, checkEnumeratedControlValues(s)...)
+		diags = append(diags, checkStanzaFieldPlacement(s, isSource)...)
+		diags = append(diags, checkPackageNameValidity(s, isSource)...)
+		diags = append(diags, checkURLFields(s)...)
 	}
 	return diags
 }
@@ -126,6 +130,17 @@ func lintSourceStanza(s controlStanza, ctx LintContext) []Diag {
 				Line: ln, Col: 0, EndLine: ln, EndCol: 0,
 				Severity: SeverityWarning,
 				Message:  fmt.Sprintf("Standards-Version %q should match X.Y.Z or X.Y.Z.W", sv),
+				Code:     "control-standards-version-format",
+				Source:   "control",
+			})
+		} else if isOutdatedStandardsVersion(sv) {
+			ln := s.fieldLine["standards-version"]
+			diags = append(diags, Diag{
+				Line: ln, Col: 0, EndLine: ln, EndCol: 0,
+				Severity: SeverityInfo,
+				Message:  fmt.Sprintf("Standards-Version %q is outdated; consider updating to %s or later", sv, minStandardsVersion),
+				Code:     "control-standards-version-outdated",
+				Source:   "control",
 			})
 		}
 	}
@@ -309,4 +324,179 @@ func canonicalFieldName(lower string) string {
 		return f.Name
 	}
 	return lower
+}
+
+// ---------------------------------------------------------------------------
+// Standards-Version currency
+// ---------------------------------------------------------------------------
+
+// minStandardsVersion is the minimum recommended Debian Policy version.
+// As of Debian Policy 4.7.1 (2025), anything below 4.0.0 is very outdated.
+const minStandardsVersion = "4.0.0"
+
+// isOutdatedStandardsVersion reports whether sv is older than
+// minStandardsVersion. Both are "X.Y.Z" or "X.Y.Z.W" strings compared
+// component-wise.
+func isOutdatedStandardsVersion(sv string) bool {
+	return compareVersions(sv, minStandardsVersion) < 0
+}
+
+// compareVersions compares two "X.Y.Z" or "X.Y.Z.W" version strings
+// component-wise. Returns -1, 0, or 1.
+func compareVersions(a, b string) int {
+	ai := splitVersionParts(a)
+	bi := splitVersionParts(b)
+	for i := 0; i < len(ai) && i < len(bi); i++ {
+		if ai[i] < bi[i] {
+			return -1
+		}
+		if ai[i] > bi[i] {
+			return 1
+		}
+	}
+	if len(ai) < len(bi) {
+		return -1
+	}
+	if len(ai) > len(bi) {
+		return 1
+	}
+	return 0
+}
+
+func splitVersionParts(v string) []int {
+	parts := strings.Split(v, ".")
+	out := make([]int, len(parts))
+	for i, p := range parts {
+		n := 0
+		for _, c := range p {
+			if c >= '0' && c <= '9' {
+				n = n*10 + int(c-'0')
+			}
+		}
+		out[i] = n
+	}
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// Stanza-type field placement
+// ---------------------------------------------------------------------------
+
+// sourceOnlyFields are fields that only make sense in the source stanza.
+var sourceOnlyFields = map[string]bool{
+	"source": true, "maintainer": true, "uploaders": true,
+	"standards-version": true,
+	"build-depends": true, "build-depends-indep": true,
+	"build-conflicts": true, "build-conflicts-indep": true,
+	"rules-requires-root": true, "testsuite": true,
+}
+
+// binaryOnlyFields are fields that only make sense in binary stanzas.
+var binaryOnlyFields = map[string]bool{
+	"package": true, "architecture": true, "multi-arch": true,
+	"depends": true, "recommends": true, "suggests": true,
+	"enhances": true, "pre-depends": true,
+	"breaks": true, "conflicts": true, "replaces": true,
+	"provides": true, "description": true,
+	"essential": true, "installed-size": true,
+	"built-using": true, "package-type": true,
+	"build-profiles": true, "tag": true,
+}
+
+func checkStanzaFieldPlacement(s controlStanza, isSource bool) []Diag {
+	var diags []Diag
+	for lower, lineNum := range s.fieldLine {
+		if xPrefixRe.MatchString(lower) {
+			continue
+		}
+		if isSource && binaryOnlyFields[lower] {
+			diags = append(diags, Diag{
+				Line: lineNum, Col: 0, EndLine: lineNum, EndCol: 0,
+				Severity: SeverityWarning,
+				Message:  fmt.Sprintf("field %q is typically used in binary (Package) stanzas, not in the source stanza", canonicalFieldName(lower)),
+				Code:     "control-field-wrong-stanza",
+				Source:   "control",
+			})
+		}
+		if !isSource && sourceOnlyFields[lower] {
+			diags = append(diags, Diag{
+				Line: lineNum, Col: 0, EndLine: lineNum, EndCol: 0,
+				Severity: SeverityWarning,
+				Message:  fmt.Sprintf("field %q is typically used in the source stanza, not in binary stanzas", canonicalFieldName(lower)),
+				Code:     "control-field-wrong-stanza",
+				Source:   "control",
+			})
+		}
+	}
+	return diags
+}
+
+// ---------------------------------------------------------------------------
+// Package / Source name validity
+// ---------------------------------------------------------------------------
+
+var packageNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9+.\-]+$`)
+
+func checkPackageNameValidity(s controlStanza, isSource bool) []Diag {
+	if isSource {
+		if name, ok := s.fields["source"]; ok {
+			if !packageNameRe.MatchString(name) {
+				ln := s.fieldLine["source"]
+				return []Diag{{
+					Line: ln, Col: 0, EndLine: ln, EndCol: 0,
+					Severity: SeverityWarning,
+					Message:  fmt.Sprintf("source name %q is not a valid Debian package name (must match [a-z0-9][a-z0-9+.-]+)", name),
+					Code:     "control-invalid-package-name",
+					Source:   "control",
+				}}
+			}
+		}
+	} else {
+		if name, ok := s.fields["package"]; ok {
+			if !packageNameRe.MatchString(name) {
+				ln := s.fieldLine["package"]
+				return []Diag{{
+					Line: ln, Col: 0, EndLine: ln, EndCol: 0,
+					Severity: SeverityWarning,
+					Message:  fmt.Sprintf("package name %q is not a valid Debian package name (must match [a-z0-9][a-z0-9+.-]+)", name),
+					Code:     "control-invalid-package-name",
+					Source:   "control",
+				}}
+			}
+		}
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// URL field validation
+// ---------------------------------------------------------------------------
+
+// urlFields lists control fields whose values should be http(s) URLs.
+var urlFields = map[string]bool{
+	"homepage": true,
+	"vcs-browser": true,
+}
+
+func checkURLFields(s controlStanza) []Diag {
+	var diags []Diag
+	for lower, lineNum := range s.fieldLine {
+		if !urlFields[lower] {
+			continue
+		}
+		val := strings.TrimSpace(s.fields[lower])
+		if val == "" {
+			continue
+		}
+		if !strings.HasPrefix(val, "https://") && !strings.HasPrefix(val, "http://") {
+			diags = append(diags, Diag{
+				Line: lineNum, Col: 0, EndLine: lineNum, EndCol: 0,
+				Severity: SeverityWarning,
+				Message:  fmt.Sprintf("%s should be an http(s) URL, got %q", canonicalFieldName(lower), val),
+				Code:     "control-invalid-url",
+				Source:   "control",
+			})
+		}
+	}
+	return diags
 }

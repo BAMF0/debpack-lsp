@@ -41,10 +41,24 @@ func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protoc
 }
 
 // ---------------------------------------------------------------------------
-// changelog hover: LP: #NNNNNN
+// changelog hover: LP: #NNNNNN / Closes: #NNNNNN
 // ---------------------------------------------------------------------------
 
 func (s *Server) hoverBugRef(text, line string, offset int) (*protocol.Hover, error) {
+	// Distinguish Launchpad ("LP: #") from Debian BTS ("Closes: #") refs.
+	// The Debian BTS backend is not yet implemented, so "Closes: #N" gets a
+	// dedicated message rather than a (wrong) Launchpad lookup.
+	if _, idStr := debpkg.ClosesRefAtOffset(text, offset); idStr != "" {
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			return nil, nil
+		}
+		md := fmt.Sprintf(
+			"**Closes: #%d** — Debian BTS support is not yet implemented.\n\n"+
+				"See https://bugs.debian.org/%d", id, id)
+		return markdownHover(md), nil
+	}
+
 	idStr := debpkg.BugNumberAtOffset(text, offset)
 	if idStr == "" {
 		return nil, nil
@@ -150,6 +164,9 @@ func bugMarkdown(bug bugs.Bug) string {
 
 func dhMarkdown(cmd debhelper.Command) string {
 	md := fmt.Sprintf("**%s**\n\n%s", cmd.Name, cmd.Synopsis)
+	if cmd.Description != "" {
+		md += "\n\n" + cmd.Description
+	}
 	if len(cmd.Flags) > 0 {
 		md += "\n\n**Flags:**\n"
 		for _, f := range cmd.Flags {
@@ -173,35 +190,52 @@ func markdownHover(md string) *protocol.Hover {
 }
 
 // lineColToByteOffset converts a line/col (0-indexed) to a byte offset in text.
+// col is a character (rune) count as reported by the LSP client; it is
+// converted to a byte offset within the target line.
 func lineColToByteOffset(text string, line, col int) int {
-	off := 0
+	// Advance to the start of the target line by counting newlines.
+	lineStart := 0
 	cur := 0
-	for _, ch := range text {
+	for i := 0; i < len(text); i++ {
 		if cur == line {
 			break
 		}
-		if ch == '\n' {
+		if text[i] == '\n' {
 			cur++
+			lineStart = i + 1
 		}
-		off++
 	}
-	return off + col
+	if cur < line {
+		return len(text) // line beyond EOF
+	}
+	// Find the end of the target line.
+	lineEnd := len(text)
+	for i := lineStart; i < len(text); i++ {
+		if text[i] == '\n' {
+			lineEnd = i
+			break
+		}
+	}
+	return lineStart + colToByteOffset(text[lineStart:lineEnd], col)
 }
 
 // wordAtCol extracts the identifier-like word (letters, digits, _, -) under col.
+// col is a character (rune) count; it is converted to a byte offset before
+// scanning word boundaries.
 func wordAtCol(line string, col int) string {
-	if col > len(line) {
-		col = len(line)
+	byteCol := colToByteOffset(line, col)
+	if byteCol > len(line) {
+		byteCol = len(line)
 	}
 	isWord := func(b byte) bool {
 		return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') ||
 			(b >= '0' && b <= '9') || b == '_' || b == '-'
 	}
-	start := col
+	start := byteCol
 	for start > 0 && isWord(line[start-1]) {
 		start--
 	}
-	end := col
+	end := byteCol
 	for end < len(line) && isWord(line[end]) {
 		end++
 	}

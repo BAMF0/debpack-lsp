@@ -50,6 +50,8 @@ func lintCopyright(text string) []Diag {
 					Line: s.start, Col: 0, EndLine: s.start, EndCol: 0,
 					Severity: SeverityError,
 					Message:  "copyright header stanza is missing the mandatory \"Format:\" field",
+				Code:     "dep5-missing-format",
+				Source:   "dep5",
 				})
 			}
 			continue
@@ -65,6 +67,8 @@ func lintCopyright(text string) []Diag {
 					Line: s.start, Col: 0, EndLine: s.start, EndCol: 0,
 					Severity: SeverityError,
 					Message:  "Files stanza is missing the mandatory \"Copyright:\" field",
+					Code:     "dep5-missing-copyright",
+					Source:   "dep5",
 				})
 			}
 			if _, ok := s.fields["license"]; !ok {
@@ -72,7 +76,26 @@ func lintCopyright(text string) []Diag {
 					Line: s.start, Col: 0, EndLine: s.start, EndCol: 0,
 					Severity: SeverityError,
 					Message:  "Files stanza is missing the mandatory \"License:\" field",
+					Code:     "dep5-missing-license",
+					Source:   "dep5",
 				})
+			} else {
+				// Validate the license short name against known SPDX ids.
+				// The value may be a short name followed by full-text on
+				// continuation lines; only check the first line.
+				licVal := s.fields["license"]
+				licLine := s.fieldLine["license"]
+				licName, _, _ := strings.Cut(licVal, "\n")
+				licName = strings.TrimSpace(licName)
+				if licName != "" && !isKnownLicense(licName) {
+					diags = append(diags, Diag{
+						Line: licLine, Col: 0, EndLine: licLine, EndCol: 0,
+						Severity: SeverityInfo,
+						Message:  fmt.Sprintf("license %q is not a recognised SPDX identifier or LicenseRef-* name", licName),
+						Code:     "dep5-unknown-license",
+						Source:   "dep5",
+					})
+				}
 			}
 		}
 	}
@@ -136,4 +159,19 @@ func parseCopyrightStanzas(lines []string) []copyrightStanza {
 	}
 	flush(len(lines))
 	return stanzas
+}
+
+// isKnownLicense reports whether name is a recognised SPDX identifier or a
+// LicenseRef-* name (used for non-SPDX licenses in DEP-5).
+func isKnownLicense(name string) bool {
+	if strings.HasPrefix(name, "LicenseRef-") {
+		return true
+	}
+	lower := strings.ToLower(name)
+	for _, lic := range knownSPDXLicenses {
+		if strings.ToLower(lic) == lower {
+			return true
+		}
+	}
+	return false
 }

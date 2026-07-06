@@ -17,6 +17,9 @@ func TestFileTypeFromURI(t *testing.T) {
 		{"file:///home/user/pkg/debian/watch", debpkg.FileTypeWatch},
 		{"file:///home/user/pkg/debian/copyright", debpkg.FileTypeCopyright},
 		{"file:///home/user/pkg/debian/patches/fix-crash.patch", debpkg.FileTypePatch},
+		{"file:///home/user/pkg/debian/patches/series", debpkg.FileTypeUnknown},
+		{"file:///home/user/pkg/debian/patches/ubuntu/fix.patch", debpkg.FileTypePatch},
+		{"file:///home/user/pkg/debian/patches/ubuntu/series", debpkg.FileTypeUnknown},
 		{"file:///home/user/pkg/debian/curl.install", debpkg.FileTypeInstall},
 		{"file:///home/user/pkg/debian/curl.dirs", debpkg.FileTypeDirs},
 		{"file:///home/user/pkg/debian/curl.docs", debpkg.FileTypeDocs},
@@ -58,9 +61,11 @@ func TestBugRefAtCursor(t *testing.T) {
 	}{
 		{"  * Fix crash (LP: #", "LP: #", ""},
 		{"  * Fix crash (LP: #2045", "LP: #", "2045"},
-		{"  * Fix crash (LP: #2045432)", "", ""},          // cursor past closing paren
-		{"  * Closes: #12345", "Closes: #", "12345"},
-		{"  * closes: #999", "closes: #", "999"},
+		{"  * Fix crash (LP: #2045432)", "", ""}, // cursor past closing paren
+		// "Closes: #" is the Debian BTS convention; completion is disabled
+		// until a BTS backend exists, so BugRefAtCursor returns "" for it.
+		{"  * Closes: #12345", "", ""},
+		{"  * closes: #999", "", ""},
 		{"  * unrelated text", "", ""},
 	}
 	for _, tc := range cases {
@@ -68,6 +73,46 @@ func TestBugRefAtCursor(t *testing.T) {
 		if gotPfx != tc.wantPrefix || gotDig != tc.wantDigits {
 			t.Errorf("BugRefAtCursor(%q) = (%q, %q), want (%q, %q)",
 				tc.line, gotPfx, gotDig, tc.wantPrefix, tc.wantDigits)
+		}
+	}
+}
+
+func TestClosesRefAtCursor(t *testing.T) {
+	cases := []struct {
+		line       string
+		wantPrefix string
+		wantDigits string
+	}{
+		{"  * Closes: #", "Closes: #", ""},
+		{"  * Closes: #12345", "Closes: #", "12345"},
+		{"  * closes: #999", "closes: #", "999"},
+		{"  * LP: #2045", "", ""}, // not a Closes ref
+		{"  * unrelated text", "", ""},
+	}
+	for _, tc := range cases {
+		gotPfx, gotDig := debpkg.ClosesRefAtCursor(tc.line)
+		if gotPfx != tc.wantPrefix || gotDig != tc.wantDigits {
+			t.Errorf("ClosesRefAtCursor(%q) = (%q, %q), want (%q, %q)",
+				tc.line, gotPfx, gotDig, tc.wantPrefix, tc.wantDigits)
+		}
+	}
+}
+
+func TestClosesRefAtOffset(t *testing.T) {
+	text := "  * Fix crash (Closes: #12345) and also (LP: #999)"
+	cases := []struct {
+		offset int
+		wantID string
+	}{
+		{22, "12345"}, // inside #12345
+		{25, "12345"},
+		{0, ""},  // before the ref
+		{45, ""}, // inside LP: #999, not a Closes ref
+	}
+	for _, tc := range cases {
+		_, gotID := debpkg.ClosesRefAtOffset(text, tc.offset)
+		if gotID != tc.wantID {
+			t.Errorf("ClosesRefAtOffset(offset=%d) = %q, want %q", tc.offset, gotID, tc.wantID)
 		}
 	}
 }

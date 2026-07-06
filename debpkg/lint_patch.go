@@ -71,6 +71,8 @@ func lintPatch(text string) []Diag {
 			Line: 0, Col: 0, EndLine: 0, EndCol: 0,
 			Severity: SeverityError,
 			Message:  "DEP-3 patch header is missing the required \"Description:\" (or \"Subject:\") field",
+			Code:     "dep3-missing-description",
+			Source:   "dep3",
 		})
 	}
 
@@ -106,6 +108,8 @@ func lintPatch(text string) []Diag {
 			Line: 0, Col: 0, EndLine: 0, EndCol: 0,
 			Severity: SeverityWarning,
 			Message:  "DEP-3 patch header is missing \"Origin:\" (required when no \"Author:\" field is present)",
+			Code:     "dep3-missing-origin",
+			Source:   "dep3",
 		})
 	}
 

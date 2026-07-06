@@ -33,6 +33,8 @@ func lintWatch(text string) []Diag {
 				Line: i, Col: 0, EndLine: i, EndCol: len(line),
 				Severity: SeverityError,
 				Message:  "watch file must start with a version declaration (\"version=4\" or \"Version: 5\")",
+				Code:     "watch-missing-version",
+				Source:   "watch",
 			}}
 		}
 
@@ -51,5 +53,7 @@ func lintWatch(text string) []Diag {
 		Line: 0, Col: 0, EndLine: 0, EndCol: 0,
 		Severity: SeverityError,
 		Message:  "watch file is missing a version declaration (\"version=4\" or \"Version: 5\")",
+		Code:     "watch-missing-version",
+		Source:   "watch",
 	}}
 }

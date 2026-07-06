@@ -105,7 +105,7 @@ function M.setup(opts)
     ["*/debian/rules"]     = "make",
   }
   for pattern, ft in pairs(ft_map) do
-    vim.filetype.add({ filename = { [pattern] = ft } })
+    vim.filetype.add({ pattern = { [pattern] = ft } })
   end
 end
 
