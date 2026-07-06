@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg_test
 
 import (
@@ -125,13 +127,50 @@ func TestBugNumberAtOffset(t *testing.T) {
 	}{
 		{20, "2045432"}, // inside #2045432
 		{23, "2045432"},
-		{40, "999"},     // inside #999
-		{10, ""},        // in "Fix crash"
+		{40, "999"}, // inside #999
+		{10, ""},    // in "Fix crash"
 	}
 	for _, tc := range cases {
 		got := debpkg.BugNumberAtOffset(text, tc.offset)
 		if got != tc.want {
 			t.Errorf("BugNumberAtOffset(offset=%d) = %q, want %q", tc.offset, got, tc.want)
+		}
+	}
+}
+
+func TestChangelogSuiteAtCursor(t *testing.T) {
+	cases := []struct {
+		line string
+		want string
+	}{
+		{"foo (1.0-1) un", "un"},
+		{"foo (1.0-1) ", ""},
+		{"foo (1.0-1) jam", "jam"},                   // cursor after "jam", before ";"
+		{"foo (1.0-1) unstable; urgency=medium", ""}, // past ";" — not suite
+	}
+	for _, tc := range cases {
+		got := debpkg.ChangelogSuiteAtCursor(tc.line)
+		if got != tc.want {
+			t.Errorf("ChangelogSuiteAtCursor(%q) = %q, want %q", tc.line, got, tc.want)
+		}
+	}
+}
+
+func TestChangelogUrgencyAtCursor(t *testing.T) {
+	cases := []struct {
+		line string
+		want string
+	}{
+		{"foo (1.0-1) unstable; urgency=med", "med"},
+		{"foo (1.0-1) unstable; urgency=", ""},
+		{"foo (1.0-1) unstable; urgency=high", "high"},
+		{"foo (1.0-1) unstable; urgency=", ""},
+		{"no urgency here", ""},
+	}
+	for _, tc := range cases {
+		got := debpkg.ChangelogUrgencyAtCursor(tc.line)
+		if got != tc.want {
+			t.Errorf("ChangelogUrgencyAtCursor(%q) = %q, want %q", tc.line, got, tc.want)
 		}
 	}
 }

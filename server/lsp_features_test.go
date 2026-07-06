@@ -1,10 +1,13 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package server
 
 import (
+	"strings"
 	"testing"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/BAMF0/debpack-lsp/debpkg"
+	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 func TestStanzaFolds(t *testing.T) {
@@ -175,5 +178,44 @@ func TestQuickFixUnknownCode(t *testing.T) {
 	_, ok := quickFix("file:///test", debpkg.FileTypeControl, lines, 0, "unknown-code", diag)
 	if ok {
 		t.Error("expected no quick-fix for unknown code")
+	}
+}
+
+func TestHoverWatchOption(t *testing.T) {
+	s := New("test")
+	// Hover on "filenamemangle" in an opts= line.
+	line := "opts=filenamemangle=s//"
+	// col 5 is the 'f' of filenamemangle.
+	hover, err := s.hoverWatchOption(line, 5)
+	if err != nil {
+		t.Fatalf("hoverWatchOption error: %v", err)
+	}
+	if hover == nil {
+		t.Fatal("expected non-nil hover for filenamemangle")
+	}
+	mc, ok := hover.Contents.(protocol.MarkupContent)
+	if !ok {
+		t.Fatalf("expected MarkupContent, got %T", hover.Contents)
+	}
+	if !strings.Contains(mc.Value, "filenamemangle") {
+		t.Errorf("hover content should mention filenamemangle: %q", mc.Value)
+	}
+}
+
+func TestHoverWatchVersion(t *testing.T) {
+	s := New("test")
+	hover, err := s.hoverWatchOption("version=4", 3)
+	if err != nil {
+		t.Fatalf("hoverWatchOption error: %v", err)
+	}
+	if hover == nil {
+		t.Fatal("expected non-nil hover for version")
+	}
+	mc, ok := hover.Contents.(protocol.MarkupContent)
+	if !ok {
+		t.Fatalf("expected MarkupContent, got %T", hover.Contents)
+	}
+	if !strings.Contains(mc.Value, "version") {
+		t.Errorf("hover content should mention version: %q", mc.Value)
 	}
 }

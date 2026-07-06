@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg
 
 import (
@@ -117,10 +119,10 @@ func lintChangelog(text string) []Diag {
 			})
 		} else if blanksBefore > 1 {
 			diags = append(diags, Diag{
-				Line:    trailerIdx - blanksBefore,
-				Col:     0,
-				EndLine: trailerIdx - 1,
-				EndCol:  0,
+				Line:     trailerIdx - blanksBefore,
+				Col:      0,
+				EndLine:  trailerIdx - 1,
+				EndCol:   0,
 				Severity: SeverityError,
 				Message:  "expected exactly one blank line before the trailer ( -- ) line",
 			})
@@ -137,10 +139,10 @@ func lintChangelog(text string) []Diag {
 				})
 			} else if blanksAfter > 1 {
 				diags = append(diags, Diag{
-					Line:    trailerIdx + 1,
-					Col:     0,
-					EndLine: trailerIdx + blanksAfter,
-					EndCol:  0,
+					Line:     trailerIdx + 1,
+					Col:      0,
+					EndLine:  trailerIdx + blanksAfter,
+					EndCol:   0,
 					Severity: SeverityError,
 					Message:  "expected exactly one blank line after the trailer ( -- ) line",
 				})

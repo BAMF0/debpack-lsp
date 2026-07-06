@@ -1,11 +1,13 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package server
 
 import (
 	"strings"
 
+	"github.com/BAMF0/debpack-lsp/debpkg"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 func (s *Server) codeAction(ctx *glsp.Context, params *protocol.CodeActionParams) (any, error) {
@@ -29,14 +31,15 @@ func (s *Server) codeAction(ctx *glsp.Context, params *protocol.CodeActionParams
 			continue
 		}
 
-		// Only offer fixes for diagnostics within the requested range.
-		diagLine := int(diag.Range.Start.Line)
-		if diagLine < int(params.Range.Start.Line) ||
-			diagLine > int(params.Range.End.Line) {
+		// Offer fixes for diagnostics that overlap the requested range.
+		diagStart := int(diag.Range.Start.Line)
+		diagEnd := int(diag.Range.End.Line)
+		if diagEnd < int(params.Range.Start.Line) ||
+			diagStart > int(params.Range.End.Line) {
 			continue
 		}
 
-		action, ok := quickFix(uri, ft, lines, diagLine, code, diag)
+		action, ok := quickFix(uri, ft, lines, diagStart, code, diag)
 		if !ok {
 			continue
 		}

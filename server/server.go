@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package server implements the LSP server for debpack-lsp.
 // It wires together the glsp framework with the Debian-specific
 // completion, hover and diagnostic providers.
@@ -7,30 +9,30 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/BAMF0/debpack-lsp/bugs"
+	"github.com/BAMF0/debpack-lsp/debhelper"
+	"github.com/BAMF0/debpack-lsp/debpkg"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	glspserver "github.com/tliron/glsp/server"
-	"github.com/BAMF0/debpack-lsp/bugs"
-	"github.com/BAMF0/debpack-lsp/debpkg"
-	"github.com/BAMF0/debpack-lsp/debhelper"
 )
 
 const serverName = "debpack-lsp"
 
 // Server holds all shared state for the lifetime of the LSP session.
 type Server struct {
-	handler  protocol.Handler
-	glsp     *glspserver.Server
-	docs     *documentStore
-	bugs     *bugs.Store
-	dh       *debhelper.Store
-	pkg      string // detected source package name
-	isUbuntu bool   // true when the changelog version contains "ubuntu"
-	snippetsSupported bool // true when the client declared snippetSupport
-	version  string // build version (from -ldflags)
-	rootPath string // workspace root filesystem path (from RootURI)
-	workspace *workspaceCache // lazily reads sibling debian/ files
-	pkgMu    sync.RWMutex
+	handler           protocol.Handler
+	glsp              *glspserver.Server
+	docs              *documentStore
+	bugs              *bugs.Store
+	dh                *debhelper.Store
+	pkg               string          // detected source package name
+	isUbuntu          bool            // true when the changelog version contains "ubuntu"
+	snippetsSupported bool            // true when the client declared snippetSupport
+	version           string          // build version (from -ldflags)
+	rootPath          string          // workspace root filesystem path (from RootURI)
+	workspace         *workspaceCache // lazily reads sibling debian/ files
+	pkgMu             sync.RWMutex
 }
 
 // New creates and initialises a Server. The version string is surfaced in
@@ -48,19 +50,19 @@ func New(version string) *Server {
 	go s.dh.Load()
 
 	s.handler = protocol.Handler{
-		Initialize:             s.initialize,
-		Initialized:            s.initialized,
-		Shutdown:               s.shutdown,
-		TextDocumentDidOpen:    s.didOpen,
-		TextDocumentDidChange:  s.didChange,
-		TextDocumentDidClose:   s.didClose,
-		TextDocumentCompletion: s.completion,
-		TextDocumentHover:      s.hover,
-		TextDocumentFormatting: s.format,
-		TextDocumentCodeAction:           s.codeAction,
-		TextDocumentDocumentLink:         s.documentLink,
-		TextDocumentDocumentSymbol:       s.documentSymbol,
-		TextDocumentFoldingRange:         s.foldingRange,
+		Initialize:                 s.initialize,
+		Initialized:                s.initialized,
+		Shutdown:                   s.shutdown,
+		TextDocumentDidOpen:        s.didOpen,
+		TextDocumentDidChange:      s.didChange,
+		TextDocumentDidClose:       s.didClose,
+		TextDocumentCompletion:     s.completion,
+		TextDocumentHover:          s.hover,
+		TextDocumentFormatting:     s.format,
+		TextDocumentCodeAction:     s.codeAction,
+		TextDocumentDocumentLink:   s.documentLink,
+		TextDocumentDocumentSymbol: s.documentSymbol,
+		TextDocumentFoldingRange:   s.foldingRange,
 	}
 
 	s.glsp = glspserver.NewServer(&s.handler, serverName, false)

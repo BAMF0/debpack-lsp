@@ -1,12 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package server
 
 import (
 	"regexp"
 	"strings"
 
+	"github.com/BAMF0/debpack-lsp/debpkg"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 func (s *Server) documentLink(ctx *glsp.Context, params *protocol.DocumentLinkParams) ([]protocol.DocumentLink, error) {

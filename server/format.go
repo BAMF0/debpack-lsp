@@ -1,11 +1,13 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package server
 
 import (
 	"strings"
 
+	"github.com/BAMF0/debpack-lsp/debpkg"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 func (s *Server) format(_ *glsp.Context, params *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {

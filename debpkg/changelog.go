@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg
 
 import (
@@ -175,8 +177,59 @@ func BugNumbersInText(text string) map[int]bool {
 	return out
 }
 
-// subBulletRe matches a changelog sub-bullet line: leading whitespace, a dash,
-// a space, then the rest of the text typed so far.
+// KnownChangelogSuites lists common Debian and Ubuntu distribution suites
+// that appear in changelog headers after "(version)" and before ";".
+var KnownChangelogSuites = []string{
+	// Debian
+	"unstable", "experimental",
+	"stable-proposed-updates", "testing-proposed-updates",
+	"oldstable-proposed-updates", "oldstable-security",
+	"stable-security", "testing-security",
+	// Ubuntu
+	"bionic", "focal", "jammy", "noble", "oracular", "plucky",
+	"trusty", "xenial", "groovy", "hirsute", "impish",
+	"kinetic", "lunar", "mantic",
+}
+
+// KnownUrgencies lists the valid urgency values for changelog entries.
+var KnownUrgencies = []string{
+	"low", "medium", "high", "emergency", "critical",
+}
+
+// changelogSuiteRe matches the suite portion of a changelog header line
+// after "(version)" and before "; urgency=".
+var changelogSuiteRe = regexp.MustCompile(`^\S+ \([^)]+\)\s+(\S*)$`)
+
+// changelogUrgencyCursorRe matches "urgency=" followed by optional text at
+// the end of the line (where the cursor is positioned).
+var changelogUrgencyCursorRe = regexp.MustCompile(`urgency=(\w*)$`)
+
+// ChangelogSuiteAtCursor returns the suite text typed so far when the cursor
+// is between ")" and ";" on a changelog header line. Returns "" if the
+// cursor is not in the suite position.
+func ChangelogSuiteAtCursor(lineUpTo string) string {
+	// Must contain ") " and must not yet contain ";".
+	if !strings.Contains(lineUpTo, ") ") || strings.Contains(lineUpTo, ";") {
+		return ""
+	}
+	m := changelogSuiteRe.FindStringSubmatch(lineUpTo)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+// ChangelogUrgencyAtCursor returns the urgency text typed so far when the
+// cursor is after "urgency=" on a changelog header line. Returns "" if the
+// cursor is not in the urgency position.
+func ChangelogUrgencyAtCursor(lineUpTo string) string {
+	m := changelogUrgencyCursorRe.FindStringSubmatch(lineUpTo)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
 var subBulletRe = regexp.MustCompile(`^(\s+-\s)(.*)$`)
 
 // topBulletRe matches a changelog top-level bullet: leading whitespace, an

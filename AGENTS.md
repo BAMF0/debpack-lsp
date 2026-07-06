@@ -20,18 +20,19 @@ the build. Every import must use the `BAMF0` path.
 ## Architecture — package roles
 
 ```
-main            Thin entrypoint. Parses --version flag, calls server.New().Run().
+main            Thin entrypoint. Parses --version flag, calls server.New(version).Run().
 server/         LSP wiring. All protocol handlers, the document store, async
-                loading of bug and debhelper caches.
+                loading of bug and debhelper caches, workspace cache for
+                cross-file diagnostics, snippet capability detection.
 debpkg/         All Debian-file domain logic: file-type detection, lint rules,
                 formatter, completion trigger detection, similarity ranking.
                 MUST NOT import LSP types — it is LSP-free by design.
 bugs/           Bug tracker backends. Currently only a Launchpad source that
                 reads ~/.cache/lpad/<pkg>.json (no network calls). Exposes a
                 Store with All()/ByID() under a RWMutex.
-debhelper/      Scrapes installed dh_* binaries from $PATH once, caches for
-                7 days to ~/.cache/debpack-lsp/dh-cmds.json. Exposes a Store
-                with All()/ByName().
+debhelper/      Scrapes installed dh_* man pages (via "man -P cat") once,
+                caches for 7 days to ~/.cache/debpack-lsp/dh-cmds.json.
+                Exposes a Store with All()/ByName().
 internal/log    Logging only (ilog.Logf). No external dependencies.
 ```
 
@@ -43,33 +44,48 @@ internal/log    Logging only (ilog.Logf). No external dependencies.
 
 | File | Purpose |
 |---|---|
-| `filetype.go` | `FileType` enum; `FileTypeFromURI(uri)` — entry point for all file-type detection |
-| `diag.go` | `Diag`, `Severity`, `LintContext`; `Lint()` dispatcher; universal pre-pass (trailing whitespace, whitespace-only blank lines); `splitLines`, `isBlank`, `countLeadingSpaces` helpers |
-| `changelog.go` | `PackageFromChangelog`, `IsUbuntuChangelog`, `BugRefAtCursor`, `BugNumberAtOffset`, `ContextBeforeBugRef`, `BugNumbersInText`, `ChangelogContextForBugRef`, `ChangelogFixesBulletAtLine` |
+| `filetype.go` | `FileType` enum; `FileTypeFromURI(uri)` — entry point for all file-type detection; `isInDebianPatches` helper for nested patch subdirs |
+| `diag.go` | `Diag` (with `Code`/`Source` fields), `Severity`, `LintContext`; `Lint()` dispatcher (incl. `FileTypeRules`); universal pre-pass (trailing whitespace, whitespace-only blank lines, CRLF); `splitLines` (strips `\r`), `isBlank`, `countLeadingSpaces` helpers |
+| `changelog.go` | `PackageFromChangelog`, `IsUbuntuChangelog`, `BugRefAtCursor` (LP: # only), `ClosesRefAtCursor` (Closes: # only), `BugNumberAtOffset`, `ClosesRefAtOffset`, `ContextBeforeBugRef`, `BugNumbersInText`, `ChangelogContextForBugRef`, `ChangelogFixesBulletAtLine` |
 | `similarity.go` | `Tokenize` (lowercase, split non-alphanum, drop <3 chars and stop words); `TitleSimilarity` (token substring match count) |
 | `control.go` | `KnownControlFields`, `LookupField`, `FieldAtCursor`, `FieldNameFromLine`, `knownSections`, `knownArchitectures` |
-| `copyright.go` | `KnownCopyrightFields`, `LookupCopyrightField`, `knownSPDXLicenses` |
-| `patches.go` | `KnownPatchFields`, `LookupPatchField` |
+| `copyright.go` | `KnownCopyrightFields`, `LookupCopyrightField`, `knownSPDXLicenses`, `isKnownLicense` |
+| `patches.go` | `KnownPatchFields` (incl. `Subject`, `Acked-by`), `LookupPatchField`, `HasDep3Header` |
 | `watch.go` | `KnownWatchOptions`, `IsInOpts` |
 | `lint_changelog.go` | All changelog lint rules: header format, urgency, blank-line structure, trailer format, body indentation, contributor blocks |
-| `lint_control.go` | All control lint rules: mandatory fields, `Standards-Version` format, unknown fields (X-/XB-/XC-/XS- exempted), enumerated value checking, Ubuntu Maintainer consistency |
-| `lint_copyright.go` | DEP-5 rules: `Format:` presence/URI, stanza completeness, catch-all `Files: *` |
+| `lint_control.go` | All control lint rules: mandatory fields, `Standards-Version` format + currency, unknown fields (X-/XB-/XC-/XS- exempted), enumerated value checking, Ubuntu Maintainer consistency, stanza-type field placement, package-name validity, URL field validation |
+| `lint_copyright.go` | DEP-5 rules: `Format:` presence/URI, stanza completeness, catch-all `Files: *` stanza, SPDX licence validation |
 | `lint_watch.go` | Watch file version check — valid versions are 4 and 5 only |
 | `lint_patch.go` | DEP-3 rules: `Description`/`Subject` required, `Origin` validation, `Forwarded` value, `Last-Update` format, line length |
+| `lint_rules.go` | `debian/rules` lint: shebang `#!/usr/bin/make -f`, `%:` catch-all target, `dh $@` usage hint |
 | `format_changelog.go` | `FormatChangelog(text) string` — idempotent changelog formatter |
-| `debian_test.go` | Tests for `FileTypeFromURI`, `PackageFromChangelog`, `BugRefAtCursor`, `BugNumberAtOffset` |
+| `debian_test.go` | Tests for `FileTypeFromURI`, `PackageFromChangelog`, `BugRefAtCursor`, `BugNumberAtOffset`, `ClosesRefAtCursor`, `ClosesRefAtOffset` |
 | `format_changelog_test.go` | 10 black-box tests for `FormatChangelog` |
+| `diag_test.go` | Tests for CRLF detection, trailing whitespace, `splitLines` `\r` stripping |
+| `patches_test.go` | Tests for `HasDep3Header` |
+| `lint_extra_test.go` | Tests for `lintRules`, control stanza placement, package-name validity, URL fields, Standards-Version currency, SPDX licence validation |
+| `lint_test.go` | Pre-existing lint tests (control, copyright, watch, changelog, patch) |
 
 ### `server/`
 
 | File | Purpose |
 |---|---|
-| `server.go` | `Server` struct; `New()`, `Run()`; handler registration; `maybeLoadBugs`; `strPtr` helper |
-| `documents.go` | Thread-safe `documentStore` (open/close/get/applyChanges); `applyRangeChange`; its own `splitLines` (different semantics — see below) |
-| `completion.go` | All completion handlers; `changelogCompletions` dispatcher; `changelogNumberCompletions`; `changelogTitleCompletions`; `controlCompletions`; `rulesCompletions`; `copyrightCompletions`; `patchCompletions`; `watchCompletions`; `lineUpToCursor`, `fullLineAt`, `stringsToCompletions` |
-| `hover.go` | All hover handlers; `bugMarkdown`, `dhMarkdown`; `lineColToByteOffset`, `wordAtCol` |
-| `diagnostics.go` | `publishDiagnostics` (lint → `textDocument/publishDiagnostics`); `clearDiagnostics` |
+| `server.go` | `Server` struct (incl. `snippetsSupported`, `rootPath`, `workspace`); `New(version)`, `Run()`; handler registration; `maybeLoadBugs`, `maybeReloadBugsOnChange`; `stripFileScheme`, `strPtr` helpers |
+| `documents.go` | Thread-safe `documentStore` (open/close/get/applyChanges); `applyRangeChange`; `lineColToOffset` (uses `colToByteOffset` for multi-byte safety); its own `splitLines` (different semantics — see below); `stripTrailingNewline` |
+| `completion.go` | All completion handlers; `changelogCompletions` dispatcher; `changelogNumberCompletions`; `changelogTitleCompletions`; `controlCompletions`; `rulesCompletions`; `copyrightCompletions`; `patchCompletions` (snippet-aware); `watchCompletions`; `colToByteOffset`, `lineUpToCursor`, `fullLineAt`, `stringsToCompletions` |
+| `hover.go` | All hover handlers; `hoverBugRef` (routes `Closes:#` to Debian BTS message); `bugMarkdown`, `dhMarkdown`; `lineColToByteOffset` (multi-byte safe), `wordAtCol` |
+| `diagnostics.go` | `publishDiagnostics` (lint + cross-file checks → `textDocument/publishDiagnostics`); `clearDiagnostics`; surfaces `Diag.Code` as `IntegerOrString` |
 | `format.go` | `format` handler — fetches text, calls `debpkg.FormatChangelog`, returns whole-document `TextEdit` if text changed |
+| `folding.go` | `foldingRange` handler; `stanzaFolds` (control/copyright), `changelogFolds`, `patchFolds`; `isChangelogHeader`, `trimTrailingBlanks` |
+| `symbols.go` | `documentSymbol` handler; `controlSymbols`, `copyrightSymbols`, `changelogSymbols`, `patchSymbols`; `stanzaBounds`, `stanzaRange` |
+| `links.go` | `documentLink` handler; `bugRefLinks` (LP/Closes → clickable URLs), `urlFieldLinks` (Homepage/Vcs-*/Bug-*/Origin/Forwarded) |
+| `codeaction.go` | `codeAction` handler; `quickFix` (trailing whitespace, blank-line, CRLF→LF, insert DEP-3 header, DEP-5 Format, watch version); `boolPtr` |
+| `workspace.go` | `workspaceCache` (lazily reads sibling `debian/` files); `crossFileDiagnostics`; `checkDebhelperCompat`, `checkQuiltSeries`; `extractDebhelperCompatVersion` |
+| `documents_test.go` | Tests for `applyRangeChange`, `splitLines`, `lineColToOffset`, `documentStore` (incl. multi-byte and CRLF edge cases) |
+| `integration_test.go` | Integration tests exercising the full handler pipeline via a fake `glsp.Context` |
+| `lsp_features_test.go` | Tests for folding, links, symbols, and quick-fix helpers |
+| `position_test.go` | Tests for `colToByteOffset` and `wordAtCol` (multi-byte safety) |
+| `workspace_test.go` | Tests for the sibling-file cache and cross-file checks |
 
 ### `bugs/`
 
@@ -78,15 +94,25 @@ internal/log    Logging only (ilog.Logf). No external dependencies.
 | `source.go` | `Bug`, `BugSource` interface, `Store` (Load/All/ByID), `NewStore` |
 | `launchpad.go` | `launchpadSource` — reads `~/.cache/lpad/<pkg>.json`; no network |
 | `bts.go` | Stub for future Debian BTS support |
+| `bugs_test.go` | Tests for `Store`, `Load`, `ByID`, concurrent access |
+
+### `debhelper/`
+
+| File | Purpose |
+|---|---|
+| `store.go` | `Command` (Name/Synopsis/Description/Flags); `Store` (Load/All/ByName); man-page scraper (`scrapeManpage`, `parseManpage`, `joinWrapped`); `--help` flag fallback (`extractHelpInfo`, `parseFlags`); cache with `schema_version` |
+| `store_test.go` | Fixture-based parser tests, `joinWrapped`, `parseFlags`, `collapseWS`, store round-trip, live man-page integration test |
 
 ### Root
 
 | File | Purpose |
 |---|---|
-| `main.go` | Entrypoint; `--version` flag; calls `server.New().Run()` |
-| `Makefile` | `build`, `install` (`INSTALL_DIR` default `~/.local/bin`), `test`, `clean`, `uninstall` |
+| `main.go` | Entrypoint; `--version` flag; calls `server.New(version).Run()` |
+| `Makefile` | `build`, `install` (+ `install-lua`), `test` (race), `fmt`, `vet`, `lint`, `vuln`, `check`, `clean`, `uninstall` |
 | `lua/debpack-lsp.lua` | Neovim companion plugin; uses `vim.lsp.start` directly (no nvim-lspconfig needed) |
 | `go.mod` | Module `github.com/BAMF0/debpack-lsp`; Go 1.25; main dependency: `github.com/tliron/glsp v0.2.2` |
+| `LICENSE` | GPL-3.0-or-later full text |
+| `.github/workflows/ci.yml` | CI: gofmt check, go vet, go test -race, govulncheck |
 
 ---
 
@@ -119,6 +145,18 @@ derived from the changelog version string containing `"ubuntu"` (case-insensitiv
 and used to enforce the Ubuntu canonical Maintainer check in `lint_control.go`.
 Add new cross-file state here without touching the `Lint` signature.
 
+Cross-file diagnostics that need sibling `debian/` files are handled in the
+server layer (not via `LintContext`) using `workspaceCache` — see
+`server/workspace.go`.
+
+### `Closes: #` is not backed by a BTS backend
+
+`BugRefAtCursor` only matches `LP: #` (Launchpad). `ClosesRefAtCursor` /
+`ClosesRefAtOffset` match `Closes: #` for hover routing, but completion is
+disabled for `Closes: #` to avoid offering Launchpad bugs for Debian issues.
+Hovering a `Closes: #N` reference shows a link to `https://bugs.debian.org/N`
+and a "Debian BTS support not yet implemented" message.
+
 ### Ubuntu canonical maintainer
 
 Defined as the constant `ubuntuMaintainer` in `debpkg/lint_control.go`:
@@ -133,6 +171,26 @@ Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 name from the changelog, then fires `go s.bugs.Load(pkg)`.  Completion
 requests that arrive before the load finishes return an empty list — this is
 intentional and not a bug.
+
+`maybeReloadBugsOnChange` is called on every `didChange` of a changelog file.
+If the package name on line 0 has changed (e.g. the user renamed the source
+package), it re-triggers `go s.bugs.Load(pkg)`.
+
+### Workspace cache for cross-file diagnostics
+
+`workspaceCache` (`server/workspace.go`) is initialised in `initialize` from
+`RootURI`/`RootPath`.  It lazily reads sibling `debian/` files (e.g.
+`debian/compat`, `debian/source/format`, `debian/patches/series`) from disk
+and caches them.  `crossFileDiagnostics` is called from `publishDiagnostics`
+after the per-file lint pass to append cross-file checks
+(`checkDebhelperCompat`, `checkQuiltSeries`).
+
+### Snippet support detection
+
+`snippetsSupported` is set in `initialize` from the client's
+`textDocument.completion.completionItem.snippetSupport` capability.  When
+false, `patchSnippetItems` emits a plain-text fallback (no `${1:...}`
+placeholders) instead of an LTP snippet-format item.
 
 ### `bugs.Store.All()` has random iteration order
 
@@ -171,15 +229,15 @@ FileTypeChangelog  → changelogCompletions(lineUpTo, fullText, lineNum, col)
 FileTypeControl    → controlCompletions(fullText, lineUpTo, lineNum)
 FileTypeRules      → rulesCompletions(lineUpTo)
 FileTypeCopyright  → copyrightCompletions(lineUpTo)
-FileTypePatch      → patchCompletions(lineUpTo)
+FileTypePatch      → patchCompletions(lineUpTo, fullText, snippetsSupported)
 FileTypeWatch      → watchCompletions(lineUpTo)
 ```
 
 #### Changelog completions — three-branch priority order
 
 1. **LP: # number completion** (`changelogNumberCompletions`) — fires when
-   `debpkg.BugRefAtCursor(lineUpTo)` returns a non-empty prefix (`"LP: #"` or
-   `"Closes: #"`). Ranks bugs by `TitleSimilarity` using
+   `debpkg.BugRefAtCursor(lineUpTo)` returns a non-empty prefix (`"LP: #"` only).
+   Ranks bugs by `TitleSimilarity` using
    `ChangelogContextForBugRef` as the query (current-line text before trigger
    + nearest parent `  * ...` bullet text). Filters bugs already referenced in
    the file via `BugNumbersInText(fullText)`.
@@ -229,6 +287,47 @@ Currently only `FileTypeChangelog` is handled; all other file types return nil.
 `debpkg.FormatChangelog(text string) string` is idempotent.  The server returns
 a single whole-document `TextEdit` if the formatted text differs from the
 original, nil otherwise.
+
+### Code actions
+
+`codeAction` handler in `server/codeaction.go`.  Diagnostics carry a
+`Code` string (set in `debpkg/diag.go`) so quick-fixes can be keyed to a
+specific problem.  Available quick-fixes:
+- `trailing-whitespace` → remove trailing whitespace
+- `blank-line-whitespace` → clear the line
+- `crlf-line-ending` → remove `\r`
+- `dep3-missing-description` / `dep3-missing-origin` → insert DEP-3 header
+- `dep5-missing-format` → insert `Format:` field
+- `watch-missing-version` → insert `version=4`
+
+The overlap check uses range overlap (`diagStart <= reqEnd && diagEnd >= reqStart`),
+not start-line containment, so diagnostics that span the requested range are
+eligible even if their start line is outside it.
+
+### Document links
+
+`documentLink` handler in `server/links.go`.  Scans for:
+- `LP: #N` → `https://bugs.launchpad.net/bugs/N`
+- `Closes: #N` → `https://bugs.debian.org/N`
+- `Homepage:`, `Vcs-Browser:`, `Bug-*:`, `Origin:`, `Forwarded:` → the URL value
+
+### Document symbols
+
+`documentSymbol` handler in `server/symbols.go`.  Returns hierarchical
+`[]DocumentSymbol`:
+- Control: each stanza (`Source:` / `Package:`) as a `Module` symbol
+- Copyright: each `Files:` stanza as a `File` symbol
+- Changelog: each version entry as an `Event` symbol
+- Patch: each DEP-3 header field as a `Field` symbol
+
+### Folding ranges
+
+`foldingRange` handler in `server/folding.go`.  Foldable:
+- Control/copyright: blank-line-separated stanzas
+- Changelog: each version entry (header → next header / EOF)
+- Patch: the DEP-3 header block (everything before the `---` diff marker)
+
+Trailing blank lines are trimmed from fold ranges via `trimTrailingBlanks`.
 
 ---
 
@@ -301,14 +400,32 @@ and the bullet character in `m[2]`, so `len(m[1])` gives the source indent.
 
 ```
 go test ./...           # run all tests
+go test -race ./...      # run with race detector (make test)
 go test ./debpkg/ -v    # verbose debpkg tests only
+go test ./server/ -v    # verbose server tests only
+go test ./debhelper/ -v # verbose debhelper tests only
 ```
 
-Tests currently live in `debpkg/`.  There are no server-level tests.
+Tests live in `debpkg/`, `server/`, `debhelper/`, and `bugs/`.
 
 When writing tests for `debpkg`, use package `debpkg_test` (black-box) or
 `debpkg` (white-box, needed to access unexported helpers).  The formatter
 tests in `format_changelog_test.go` use the `debpkg` package (white-box).
+
+Server tests (`server/`) use package `server` (white-box).  Integration tests
+in `server/integration_test.go` exercise the full handler pipeline
+(initialize → didOpen → completion/hover/codeAction → didChange → assert
+diagnostics) via a fake `glsp.Context`.  Unit tests in
+`server/documents_test.go` cover `applyRangeChange` (incremental sync),
+`splitLines`, and `lineColToOffset` including multi-byte edge cases.
+`server/position_test.go` tests the `colToByteOffset` helper.
+`server/workspace_test.go` tests the sibling-file cache and cross-file checks.
+`server/lsp_features_test.go` tests folding, links, symbols, and quick-fix
+helpers.
+
+Debhelper tests (`debhelper/store_test.go`) include fixture-based parser
+tests for the man-page scraper and a live integration test (skipped when
+`man` is unavailable).
 
 ---
 
@@ -316,8 +433,14 @@ tests in `format_changelog_test.go` use the `debpkg` package (white-box).
 
 ```
 make build              # produces ./debpack-lsp binary
-make install            # installs to ~/.local/bin (override: INSTALL_DIR=/usr/local/bin make install)
-make test               # go test ./...
+make install            # installs binary + Lua plugin (override: INSTALL_DIR=/usr/local/bin)
+make install-lua        # installs only the Neovim Lua plugin (override: LUA_DIR=...)
+make test               # go test -race ./...
+make fmt                # gofmt -s -w .
+make vet                # go vet ./...
+make lint               # golangci-lint (if installed)
+make vuln               # govulncheck (if installed)
+make check              # vet + test
 make clean              # removes ./debpack-lsp
 ```
 
@@ -332,6 +455,9 @@ Version is injected at build time via `-ldflags "-X main.version=$(VERSION)"`.
 |---|---|---|---|
 | Launchpad bugs | `~/.cache/lpad/<pkg>.json` | external (`lpad` tool) | `lpad sync` |
 | debhelper commands | `~/.cache/debpack-lsp/dh-cmds.json` | 7 days | `debhelper.Store.Load()` |
+
+The debhelper cache uses `schema_version` (currently 2); a mismatched version
+is treated as stale, forcing a re-scrape from man pages.
 
 The server never writes to the lpad cache.  If it is absent, bug completions
 and hover return "not found in local cache" messages.
@@ -349,3 +475,12 @@ and hover return "not found in local cache" messages.
   passes it through verbatim.
 - **No distribution/suite name validation** in changelog — out of scope.
 - **No LP bug existence checks** — async bug-store warnings are out of scope.
+- **No `Closes: #` completion** — the Debian BTS backend (`bugs/bts.go`) is a
+  stub; completion is disabled to avoid offering Launchpad bugs for Debian issues.
+- **No range/on-type formatting** — only whole-document formatting is registered.
+- **No direct lint for `debian/compat`, `debian/source/format`,
+  `debian/patches/series`** — they are read by the workspace cache for
+  cross-file checks but not individually linted when opened directly.
+- **`*.install`/`*.dirs`/`*.docs`/`*.links`/`*.manpages` are detected but
+  receive only universal lint** — no file-specific completions, hover, or
+  format support yet.

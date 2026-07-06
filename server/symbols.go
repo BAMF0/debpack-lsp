@@ -1,11 +1,13 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package server
 
 import (
 	"strings"
 
+	"github.com/BAMF0/debpack-lsp/debpkg"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 func (s *Server) documentSymbol(ctx *glsp.Context, params *protocol.DocumentSymbolParams) (any, error) {
@@ -70,10 +72,10 @@ func controlSymbols(lines []string) []protocol.DocumentSymbol {
 		}
 		kind := protocol.SymbolKindModule
 		out = append(out, protocol.DocumentSymbol{
-			Name:          name + ": " + val,
-			Detail:        detail,
-			Kind:          kind,
-			Range:         stanzaRange(b, lines),
+			Name:           name + ": " + val,
+			Detail:         detail,
+			Kind:           kind,
+			Range:          stanzaRange(b, lines),
 			SelectionRange: stanzaRange(b, lines),
 		})
 	}
@@ -125,9 +127,9 @@ func changelogSymbol(b [2]int, lines []string) protocol.DocumentSymbol {
 	}
 	kind := protocol.SymbolKindEvent
 	return protocol.DocumentSymbol{
-		Name:  trimmed,
+		Name:   trimmed,
 		Detail: &detail,
-		Kind:  kind,
+		Kind:   kind,
 		Range: protocol.Range{
 			Start: protocol.Position{Line: uint32(b[0]), Character: 0},
 			End:   protocol.Position{Line: uint32(b[1]), Character: uint32(endCol)},
@@ -154,9 +156,9 @@ func patchSymbols(lines []string) []protocol.DocumentSymbol {
 		val = strings.TrimSpace(val)
 		kind := protocol.SymbolKindField
 		out = append(out, protocol.DocumentSymbol{
-			Name:            name + ": " + val,
-			Kind:            kind,
-			Range:           protocol.Range{
+			Name: name + ": " + val,
+			Kind: kind,
+			Range: protocol.Range{
 				Start: protocol.Position{Line: uint32(i), Character: 0},
 				End:   protocol.Position{Line: uint32(i), Character: uint32(len(line))},
 			},

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bugs
 
 // btsBugSource is a stub for future Debian BTS integration.

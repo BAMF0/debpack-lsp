@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg
 
 import (
@@ -50,8 +52,8 @@ func lintCopyright(text string) []Diag {
 					Line: s.start, Col: 0, EndLine: s.start, EndCol: 0,
 					Severity: SeverityError,
 					Message:  "copyright header stanza is missing the mandatory \"Format:\" field",
-				Code:     "dep5-missing-format",
-				Source:   "dep5",
+					Code:     "dep5-missing-format",
+					Source:   "dep5",
 				})
 			}
 			continue

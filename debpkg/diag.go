@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg
 
 import "strings"
@@ -55,6 +57,10 @@ func Lint(text string, ft FileType, ctx LintContext) []Diag {
 		diags = append(diags, lintPatch(text)...)
 	case FileTypeRules:
 		diags = append(diags, lintRules(text)...)
+	case FileTypeInstall, FileTypeLinks:
+		diags = append(diags, lintInstallFile(text, true)...)
+	case FileTypeDirs, FileTypeDocs, FileTypeManpages:
+		diags = append(diags, lintInstallFile(text, false)...)
 	}
 
 	return diags

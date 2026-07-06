@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg
 
 import (
@@ -386,7 +388,7 @@ func splitVersionParts(v string) []int {
 var sourceOnlyFields = map[string]bool{
 	"source": true, "maintainer": true, "uploaders": true,
 	"standards-version": true,
-	"build-depends": true, "build-depends-indep": true,
+	"build-depends":     true, "build-depends-indep": true,
 	"build-conflicts": true, "build-conflicts-indep": true,
 	"rules-requires-root": true, "testsuite": true,
 }
@@ -474,7 +476,7 @@ func checkPackageNameValidity(s controlStanza, isSource bool) []Diag {
 
 // urlFields lists control fields whose values should be http(s) URLs.
 var urlFields = map[string]bool{
-	"homepage": true,
+	"homepage":    true,
 	"vcs-browser": true,
 }
 

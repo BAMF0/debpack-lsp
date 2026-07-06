@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package server
 
 import (
@@ -5,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BAMF0/debpack-lsp/bugs"
+	"github.com/BAMF0/debpack-lsp/debhelper"
+	"github.com/BAMF0/debpack-lsp/debpkg"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/BAMF0/debpack-lsp/bugs"
-	"github.com/BAMF0/debpack-lsp/debpkg"
-	"github.com/BAMF0/debpack-lsp/debhelper"
 )
 
 func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
@@ -36,6 +38,8 @@ func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protoc
 		return s.hoverCopyrightField(fullLine)
 	case debpkg.FileTypePatch:
 		return s.hoverPatchField(fullLine)
+	case debpkg.FileTypeWatch:
+		return s.hoverWatchOption(fullLine, col)
 	}
 	return nil, nil
 }
@@ -149,6 +153,31 @@ func (s *Server) hoverPatchField(line string) (*protocol.Hover, error) {
 		md += "\n\n**Known values:** " + strings.Join(f.Values, ", ")
 	}
 	return markdownHover(md), nil
+}
+
+// ---------------------------------------------------------------------------
+// watch hover: debian/watch options
+// ---------------------------------------------------------------------------
+
+func (s *Server) hoverWatchOption(line string, col int) (*protocol.Hover, error) {
+	word := wordAtCol(line, col)
+	if word == "" {
+		return nil, nil
+	}
+	lower := strings.ToLower(word)
+
+	// "version" keyword
+	if lower == "version" {
+		return markdownHover("**version**\n\nWatch file version declaration. Valid values are `4` and `5`."), nil
+	}
+
+	// Check KnownWatchOptions
+	for _, opt := range debpkg.KnownWatchOptions {
+		if strings.ToLower(opt.Name) == lower {
+			return markdownHover(fmt.Sprintf("**%s**\n\n%s", opt.Name, opt.Description)), nil
+		}
+	}
+	return nil, nil
 }
 
 // ---------------------------------------------------------------------------

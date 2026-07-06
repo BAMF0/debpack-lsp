@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package debpkg provides file-type detection and parsing utilities for
 // files found inside a debian/ source package directory.
 package debpkg
@@ -94,6 +96,16 @@ func (ft FileType) String() string {
 		return "copyright"
 	case FileTypePatch:
 		return "patch"
+	case FileTypeInstall:
+		return "install"
+	case FileTypeDirs:
+		return "dirs"
+	case FileTypeDocs:
+		return "docs"
+	case FileTypeLinks:
+		return "links"
+	case FileTypeManpages:
+		return "manpages"
 	default:
 		return "unknown"
 	}

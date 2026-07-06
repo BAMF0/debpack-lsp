@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg_test
 
 import (
@@ -181,6 +183,141 @@ func TestLintCopyrightUnknownLicense(t *testing.T) {
 	for _, d := range diags {
 		if d.Code == "dep5-unknown-license" {
 			t.Error("did not expect dep5-unknown-license for LicenseRef-Custom")
+		}
+	}
+}
+
+func TestLintInstallTwoFields(t *testing.T) {
+	// *.install with correct 2-field lines — no field-count diagnostics.
+	text := "src/foo usr/bin\nsrc/bar usr/share/doc\n"
+	diags := debpkg.Lint(text, debpkg.FileTypeInstall, debpkg.LintContext{})
+	for _, d := range diags {
+		if d.Code == "install-field-count" {
+			t.Errorf("unexpected install-field-count for valid line: %s", d.Message)
+		}
+	}
+
+	// *.install with a 1-field line — should warn.
+	text = "src/foo\n"
+	diags = debpkg.Lint(text, debpkg.FileTypeInstall, debpkg.LintContext{})
+	found := false
+	for _, d := range diags {
+		if d.Code == "install-field-count" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected install-field-count for 1-field line in *.install")
+	}
+
+	// *.install with a 3-field line — should warn.
+	text = "src/foo usr/bin extra\n"
+	diags = debpkg.Lint(text, debpkg.FileTypeInstall, debpkg.LintContext{})
+	found = false
+	for _, d := range diags {
+		if d.Code == "install-field-count" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected install-field-count for 3-field line in *.install")
+	}
+}
+
+func TestLintInstallLinksTwoFields(t *testing.T) {
+	// *.links with correct 2-field lines — no diagnostic.
+	text := "src/foo usr/bin/foo\n"
+	diags := debpkg.Lint(text, debpkg.FileTypeLinks, debpkg.LintContext{})
+	for _, d := range diags {
+		if d.Code == "install-field-count" {
+			t.Errorf("unexpected install-field-count for valid .links line: %s", d.Message)
+		}
+	}
+
+	// *.links with 1-field line — should warn.
+	text = "src/foo\n"
+	diags = debpkg.Lint(text, debpkg.FileTypeLinks, debpkg.LintContext{})
+	found := false
+	for _, d := range diags {
+		if d.Code == "install-field-count" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected install-field-count for 1-field line in *.links")
+	}
+}
+
+func TestLintDirsSinglePath(t *testing.T) {
+	// *.dirs with correct single-path lines — no diagnostic.
+	text := "usr/bin\nusr/share/doc\n"
+	diags := debpkg.Lint(text, debpkg.FileTypeDirs, debpkg.LintContext{})
+	for _, d := range diags {
+		if d.Code == "install-single-path" {
+			t.Errorf("unexpected install-single-path for valid .dirs line: %s", d.Message)
+		}
+	}
+
+	// *.dirs with 2-field line — should warn.
+	text = "usr/bin extra\n"
+	diags = debpkg.Lint(text, debpkg.FileTypeDirs, debpkg.LintContext{})
+	found := false
+	for _, d := range diags {
+		if d.Code == "install-single-path" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected install-single-path for 2-field line in *.dirs")
+	}
+}
+
+func TestLintInstallEmptyFile(t *testing.T) {
+	text := "\n\n\n"
+	diags := debpkg.Lint(text, debpkg.FileTypeInstall, debpkg.LintContext{})
+	found := false
+	for _, d := range diags {
+		if d.Code == "install-empty" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected install-empty for empty file")
+	}
+}
+
+func TestLintInstallCommentsIgnored(t *testing.T) {
+	// Comments should not trigger field-count warnings.
+	text := "# This is a comment\nsrc/foo usr/bin\n"
+	diags := debpkg.Lint(text, debpkg.FileTypeInstall, debpkg.LintContext{})
+	for _, d := range diags {
+		if d.Code == "install-field-count" {
+			t.Errorf("unexpected install-field-count for commented line: %s", d.Message)
+		}
+	}
+}
+
+func TestFileTypeString(t *testing.T) {
+	cases := []struct {
+		ft   debpkg.FileType
+		want string
+	}{
+		{debpkg.FileTypeControl, "control"},
+		{debpkg.FileTypeChangelog, "changelog"},
+		{debpkg.FileTypeRules, "rules"},
+		{debpkg.FileTypeWatch, "watch"},
+		{debpkg.FileTypeCopyright, "copyright"},
+		{debpkg.FileTypePatch, "patch"},
+		{debpkg.FileTypeInstall, "install"},
+		{debpkg.FileTypeDirs, "dirs"},
+		{debpkg.FileTypeDocs, "docs"},
+		{debpkg.FileTypeLinks, "links"},
+		{debpkg.FileTypeManpages, "manpages"},
+		{debpkg.FileTypeUnknown, "unknown"},
+	}
+	for _, tc := range cases {
+		if got := tc.ft.String(); got != tc.want {
+			t.Errorf("FileType(%d).String() = %q, want %q", tc.ft, got, tc.want)
 		}
 	}
 }

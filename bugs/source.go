@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package bugs provides bug data retrieval for debpack-lsp.
 //
 // The BugSource interface is the extensibility seam: add a new implementation

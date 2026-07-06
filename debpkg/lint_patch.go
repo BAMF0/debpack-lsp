@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package debpkg
 
 import (
@@ -41,9 +43,9 @@ var originKeywordRe = regexp.MustCompile(`^([a-zA-Z]+),\s`)
 type dep3Field struct {
 	name      string
 	value     string
-	lineStart int           // line of the "Name: value" declaration
-	bodyLines []string      // continuation lines of the value (for Description)
-	bodyStart []int         // corresponding line numbers for bodyLines
+	lineStart int      // line of the "Name: value" declaration
+	bodyLines []string // continuation lines of the value (for Description)
+	bodyStart []int    // corresponding line numbers for bodyLines
 }
 
 // ---------------------------------------------------------------------------

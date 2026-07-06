@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package server
 
 import (
@@ -6,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BAMF0/debpack-lsp/debpkg"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/BAMF0/debpack-lsp/debpkg"
 )
 
 func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, error) {
@@ -25,11 +27,11 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 	case debpkg.FileTypeChangelog:
 		return s.changelogCompletions(lineUpTo, text, int(params.Position.Line), int(params.Position.Character)), nil
 	case debpkg.FileTypeControl:
-		return s.controlCompletions(text, lineUpTo, int(params.Position.Line)), nil
+		return s.controlCompletions(text, lineUpTo, int(params.Position.Line), s.snippetsSupported), nil
 	case debpkg.FileTypeRules:
 		return s.rulesCompletions(lineUpTo), nil
 	case debpkg.FileTypeCopyright:
-		return s.copyrightCompletions(lineUpTo), nil
+		return s.copyrightCompletions(lineUpTo, s.snippetsSupported), nil
 	case debpkg.FileTypePatch:
 		return s.patchCompletions(lineUpTo, text, s.snippetsSupported), nil
 	case debpkg.FileTypeWatch:
@@ -43,19 +45,67 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 // ---------------------------------------------------------------------------
 
 func (s *Server) changelogCompletions(lineUpTo, fullText string, lineNum, col int) []protocol.CompletionItem {
-	// Priority 1: cursor is inside an "LP: #" or "Closes: #" reference →
-	// complete the bug number (existing behaviour), filtering already-listed bugs.
+	// Priority 1: cursor is inside an "LP: #" reference →
+	// complete the bug number, filtering already-listed bugs.
 	if prefix, digits := debpkg.BugRefAtCursor(lineUpTo); prefix != "" {
 		return s.changelogNumberCompletions(lineUpTo, fullText, lineNum, digits)
 	}
 
-	// Priority 2: cursor is on a sub-bullet under a "* Fixes:" parent →
+	// Priority 2: cursor is after ")" on a header line, before ";" →
+	// complete the distribution suite name.
+	if suite := debpkg.ChangelogSuiteAtCursor(lineUpTo); suite != "" || strings.HasSuffix(lineUpTo, ") ") {
+		return changelogSuiteCompletions(suite)
+	}
+
+	// Priority 3: cursor is after "urgency=" → complete the urgency value.
+	if urgency := debpkg.ChangelogUrgencyAtCursor(lineUpTo); urgency != "" || strings.HasSuffix(strings.ToLower(lineUpTo), "urgency=") {
+		return changelogUrgencyCompletions(urgency)
+	}
+
+	// Priority 4: cursor is on a sub-bullet under a "* Fixes:" parent →
 	// complete the bug title and insert "title (LP: #N)".
 	if startCol, typedText, ok := debpkg.ChangelogFixesBulletAtLine(fullText, lineNum); ok {
 		return s.changelogTitleCompletions(fullText, typedText, lineNum, startCol, col)
 	}
 
 	return nil
+}
+
+// changelogSuiteCompletions completes distribution suite names (unstable,
+// focal, jammy, …) when the cursor is between ")" and ";" on a changelog
+// header line.
+func changelogSuiteCompletions(prefix string) []protocol.CompletionItem {
+	lower := strings.ToLower(prefix)
+	var items []protocol.CompletionItem
+	for _, suite := range debpkg.KnownChangelogSuites {
+		if !strings.HasPrefix(strings.ToLower(suite), lower) {
+			continue
+		}
+		s := suite
+		items = append(items, protocol.CompletionItem{
+			Label:      suite,
+			InsertText: &s,
+		})
+	}
+	return items
+}
+
+// changelogUrgencyCompletions completes urgency values (low, medium, high,
+// emergency, critical) when the cursor is after "urgency=".
+func changelogUrgencyCompletions(prefix string) []protocol.CompletionItem {
+	lower := strings.ToLower(prefix)
+	var items []protocol.CompletionItem
+	for _, urg := range debpkg.KnownUrgencies {
+		if !strings.HasPrefix(strings.ToLower(urg), lower) {
+			continue
+		}
+		u := urg
+		items = append(items, protocol.CompletionItem{
+			Label:      urg,
+			InsertText: &u,
+		})
+	}
+	return items
 }
 
 // changelogNumberCompletions handles "LP: #<digits>" cursor context.
@@ -156,12 +206,10 @@ func (s *Server) changelogTitleCompletions(fullText, typedText string, lineNum, 
 	return items
 }
 
-
-
-func (s *Server) controlCompletions(fullText, lineUpTo string, lineIdx int) []protocol.CompletionItem {
+func (s *Server) controlCompletions(fullText, lineUpTo string, lineIdx int, snippetsSupported bool) []protocol.CompletionItem {
 	// If the cursor is before ':', complete field names.
 	if fieldPrefix := debpkg.FieldAtCursor(lineUpTo); fieldPrefix != "" {
-		return controlFieldNameItems(fieldPrefix)
+		return controlFieldNameItems(fieldPrefix, snippetsSupported)
 	}
 
 	// Otherwise complete field values.
@@ -177,7 +225,7 @@ func (s *Server) controlCompletions(fullText, lineUpTo string, lineIdx int) []pr
 	return stringsToCompletions(f.Values, protocol.CompletionItemKindValue)
 }
 
-func controlFieldNameItems(prefix string) []protocol.CompletionItem {
+func controlFieldNameItems(prefix string, snippetsSupported bool) []protocol.CompletionItem {
 	lower := strings.ToLower(prefix)
 	var items []protocol.CompletionItem
 	for _, f := range debpkg.KnownControlFields {
@@ -186,12 +234,18 @@ func controlFieldNameItems(prefix string) []protocol.CompletionItem {
 		}
 		kind := protocol.CompletionItemKindField
 		doc := f.Description
-		items = append(items, protocol.CompletionItem{
-			Label:         f.Name,
-			Kind:          &kind,
-			Detail:        &doc,
-			InsertText:    strPtr(f.Name + ": "),
-		})
+		item := protocol.CompletionItem{
+			Label:      f.Name,
+			Kind:       &kind,
+			Detail:     &doc,
+			InsertText: strPtr(f.Name + ": "),
+		}
+		if snippetsSupported {
+			insert, fmt := fieldSnippetInsert(f.Name, f.Values)
+			item.InsertText = &insert
+			item.InsertTextFormat = &fmt
+		}
+		items = append(items, item)
 	}
 	return items
 }
@@ -216,9 +270,9 @@ func (s *Server) rulesCompletions(lineUpTo string) []protocol.CompletionItem {
 		}
 		kind := protocol.CompletionItemKindFunction
 		items = append(items, protocol.CompletionItem{
-			Label:    cmd.Name,
-			Kind:     &kind,
-			Detail:   &cmd.Synopsis,
+			Label:  cmd.Name,
+			Kind:   &kind,
+			Detail: &cmd.Synopsis,
 			Documentation: &protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
 				Value: dhMarkdown(cmd),
@@ -233,7 +287,7 @@ func (s *Server) rulesCompletions(lineUpTo string) []protocol.CompletionItem {
 // copyright completions (DEP-5)
 // ---------------------------------------------------------------------------
 
-func (s *Server) copyrightCompletions(lineUpTo string) []protocol.CompletionItem {
+func (s *Server) copyrightCompletions(lineUpTo string, snippetsSupported bool) []protocol.CompletionItem {
 	if fieldPrefix := debpkg.FieldAtCursor(lineUpTo); fieldPrefix != "" {
 		lower := strings.ToLower(fieldPrefix)
 		var items []protocol.CompletionItem
@@ -242,12 +296,18 @@ func (s *Server) copyrightCompletions(lineUpTo string) []protocol.CompletionItem
 				continue
 			}
 			kind := protocol.CompletionItemKindField
-			items = append(items, protocol.CompletionItem{
+			item := protocol.CompletionItem{
 				Label:      f.Name,
 				Kind:       &kind,
 				Detail:     &f.Description,
 				InsertText: strPtr(f.Name + ": "),
-			})
+			}
+			if snippetsSupported {
+				insert, fmt := fieldSnippetInsert(f.Name, f.Values)
+				item.InsertText = &insert
+				item.InsertTextFormat = &fmt
+			}
+			items = append(items, item)
 		}
 		return items
 	}
@@ -289,12 +349,18 @@ func (s *Server) patchCompletions(lineUpTo, fullText string, snippetsSupported b
 			continue
 		}
 		kind := protocol.CompletionItemKindField
-		items = append(items, protocol.CompletionItem{
+		item := protocol.CompletionItem{
 			Label:      f.Name,
 			Kind:       &kind,
 			Detail:     &f.Description,
 			InsertText: strPtr(f.Name + ": "),
-		})
+		}
+		if snippetsSupported {
+			insert, fmt := fieldSnippetInsert(f.Name, f.Values)
+			item.InsertText = &insert
+			item.InsertTextFormat = &fmt
+		}
+		items = append(items, item)
 	}
 	return items
 }
@@ -421,4 +487,16 @@ func stringsToCompletions(vals []string, kind protocol.CompletionItemKind) []pro
 		})
 	}
 	return items
+}
+
+// fieldSnippetInsert builds the snippet insert text and format for a field
+// completion. When the field has enumerated Values, it uses LSP choice
+// syntax (${1|val1,val2,...|}) so the client offers a dropdown. For free-form
+// fields it uses a simple placeholder (${1:value}).
+func fieldSnippetInsert(name string, values []string) (string, protocol.InsertTextFormat) {
+	if len(values) > 0 {
+		// LTP choice syntax: ${1|opt1,opt2,opt3|}
+		return name + ": ${1|" + strings.Join(values, ",") + "|}", protocol.InsertTextFormatSnippet
+	}
+	return name + ": ${1:value}", protocol.InsertTextFormatSnippet
 }

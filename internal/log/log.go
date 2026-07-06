@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package log provides a lightweight optional logger for debpack-lsp.
 //
 // Logging is disabled by default. To enable it, set the DEBPACK_LSP_LOG

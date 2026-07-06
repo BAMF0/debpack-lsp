@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package debhelper provides completion and hover data for dh_* commands.
 //
 // On first load it scrapes the synopsis and description from each dh_*
@@ -281,6 +283,7 @@ func parseManpage(text, name string) (synopsis, description string) {
 //   - A regular hyphen at a line break is kept and the word is rejoined
 //     ("well-\nknown" -> "well-known").
 //   - Other line breaks become a single space.
+//
 // Trailing/leading whitespace and internal whitespace runs are collapsed.
 func joinWrapped(lines []string) string {
 	joined := strings.Join(lines, "\n")
