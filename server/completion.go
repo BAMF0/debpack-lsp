@@ -29,13 +29,13 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 	case debpkg.FileTypeControl:
 		return s.controlCompletions(text, lineUpTo, int(params.Position.Line), s.snippetsSupported), nil
 	case debpkg.FileTypeRules:
-		return s.rulesCompletions(lineUpTo), nil
+		return s.rulesCompletions(lineUpTo, text, s.snippetsSupported), nil
 	case debpkg.FileTypeCopyright:
-		return s.copyrightCompletions(lineUpTo, s.snippetsSupported), nil
+		return s.copyrightCompletions(lineUpTo, text, s.snippetsSupported), nil
 	case debpkg.FileTypePatch:
 		return s.patchCompletions(lineUpTo, text, s.snippetsSupported), nil
 	case debpkg.FileTypeWatch:
-		return s.watchCompletions(lineUpTo), nil
+		return s.watchCompletions(lineUpTo, text, s.snippetsSupported), nil
 	}
 	return nil, nil
 }
@@ -66,6 +66,13 @@ func (s *Server) changelogCompletions(lineUpTo, fullText string, lineNum, col in
 	// complete the bug title and insert "title (LP: #N)".
 	if startCol, typedText, ok := debpkg.ChangelogFixesBulletAtLine(fullText, lineNum); ok {
 		return s.changelogTitleCompletions(fullText, typedText, lineNum, startCol, col)
+	}
+
+	// Priority 5: keyword "entry" or "changelog" → insert a new changelog
+	// entry header with placeholders.
+	trimmed := strings.ToLower(strings.TrimSpace(lineUpTo))
+	if trimmed == "entry" || trimmed == "changelog" {
+		return genericSnippetItem("Changelog entry", changelogEntrySnippet, changelogEntryPlain, s.snippetsSupported)
 	}
 
 	return nil
@@ -207,22 +214,37 @@ func (s *Server) changelogTitleCompletions(fullText, typedText string, lineNum, 
 }
 
 func (s *Server) controlCompletions(fullText, lineUpTo string, lineIdx int, snippetsSupported bool) []protocol.CompletionItem {
+	var items []protocol.CompletionItem
+
+	// Blank line + empty control file → offer full source stanza snippet.
+	if strings.TrimSpace(lineUpTo) == "" && !debpkg.HasControlContent(fullText) {
+		items = append(items, genericSnippetItem("Control source stanza", controlSourceStanzaSnippet, controlSourceStanzaPlain, snippetsSupported)...)
+	}
+
+	// Keyword "package" → offer binary package stanza snippet (in addition
+	// to the Package: field-name completion).
+	if strings.EqualFold(strings.TrimSpace(lineUpTo), "package") {
+		items = append(items, genericSnippetItem("Binary package stanza", controlBinaryStanzaSnippet, controlBinaryStanzaPlain, snippetsSupported)...)
+	}
+
 	// If the cursor is before ':', complete field names.
 	if fieldPrefix := debpkg.FieldAtCursor(lineUpTo); fieldPrefix != "" {
-		return controlFieldNameItems(fieldPrefix, snippetsSupported)
+		items = append(items, controlFieldNameItems(fieldPrefix, snippetsSupported)...)
+		return items
 	}
 
 	// Otherwise complete field values.
 	fullLine := fullLineAt(fullText, lineIdx)
 	fieldName := debpkg.FieldNameFromLine(fullLine)
 	if fieldName == "" {
-		return nil
+		return items
 	}
 	f := debpkg.LookupField(fieldName)
 	if f == nil || len(f.Values) == 0 {
-		return nil
+		return items
 	}
-	return stringsToCompletions(f.Values, protocol.CompletionItemKindValue)
+	items = append(items, stringsToCompletions(f.Values, protocol.CompletionItemKindValue)...)
+	return items
 }
 
 func controlFieldNameItems(prefix string, snippetsSupported bool) []protocol.CompletionItem {
@@ -254,32 +276,42 @@ func controlFieldNameItems(prefix string, snippetsSupported bool) []protocol.Com
 // rules completions: dh_* commands
 // ---------------------------------------------------------------------------
 
-func (s *Server) rulesCompletions(lineUpTo string) []protocol.CompletionItem {
-	// Trigger when user has typed "dh" or "dh_..."
-	idx := strings.LastIndexAny(lineUpTo, " \t")
-	word := lineUpTo[idx+1:]
-	if !strings.HasPrefix(word, "dh") {
-		return nil
+func (s *Server) rulesCompletions(lineUpTo, fullText string, snippetsSupported bool) []protocol.CompletionItem {
+	var items []protocol.CompletionItem
+
+	// Blank line + no shebang → offer minimal rules template.
+	if strings.TrimSpace(lineUpTo) == "" && !debpkg.HasRulesShebang(fullText) {
+		items = append(items, genericSnippetItem("Rules file template", rulesTemplateSnippet, rulesTemplatePlain, snippetsSupported)...)
 	}
 
-	all := s.dh.All()
-	var items []protocol.CompletionItem
-	for _, cmd := range all {
-		if !strings.HasPrefix(cmd.Name, word) {
-			continue
-		}
-		kind := protocol.CompletionItemKindFunction
-		items = append(items, protocol.CompletionItem{
-			Label:  cmd.Name,
-			Kind:   &kind,
-			Detail: &cmd.Synopsis,
-			Documentation: &protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: dhMarkdown(cmd),
-			},
-		})
+	// Keyword "override" → offer override target snippet.
+	trimmed := strings.ToLower(strings.TrimSpace(lineUpTo))
+	if strings.HasPrefix(trimmed, "override") {
+		items = append(items, genericSnippetItem("Override target", rulesOverrideSnippet, rulesOverridePlain, snippetsSupported)...)
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Label < items[j].Label })
+
+	// dh_* command completion (existing behaviour).
+	idx := strings.LastIndexAny(lineUpTo, " \t")
+	word := lineUpTo[idx+1:]
+	if strings.HasPrefix(word, "dh") {
+		all := s.dh.All()
+		for _, cmd := range all {
+			if !strings.HasPrefix(cmd.Name, word) {
+				continue
+			}
+			kind := protocol.CompletionItemKindFunction
+			items = append(items, protocol.CompletionItem{
+				Label:  cmd.Name,
+				Kind:   &kind,
+				Detail: &cmd.Synopsis,
+				Documentation: &protocol.MarkupContent{
+					Kind:  protocol.MarkupKindMarkdown,
+					Value: dhMarkdown(cmd),
+				},
+			})
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].Label < items[j].Label })
+	}
 	return items
 }
 
@@ -287,10 +319,16 @@ func (s *Server) rulesCompletions(lineUpTo string) []protocol.CompletionItem {
 // copyright completions (DEP-5)
 // ---------------------------------------------------------------------------
 
-func (s *Server) copyrightCompletions(lineUpTo string, snippetsSupported bool) []protocol.CompletionItem {
+func (s *Server) copyrightCompletions(lineUpTo, fullText string, snippetsSupported bool) []protocol.CompletionItem {
+	var items []protocol.CompletionItem
+
+	// Blank line + no Format: field → offer DEP-5 copyright header snippet.
+	if strings.TrimSpace(lineUpTo) == "" && !debpkg.HasCopyrightFormat(fullText) {
+		items = append(items, genericSnippetItem("DEP-5 copyright header", copyrightHeaderSnippet, copyrightHeaderPlain, snippetsSupported)...)
+	}
+
 	if fieldPrefix := debpkg.FieldAtCursor(lineUpTo); fieldPrefix != "" {
 		lower := strings.ToLower(fieldPrefix)
-		var items []protocol.CompletionItem
 		for _, f := range debpkg.KnownCopyrightFields {
 			if !strings.HasPrefix(strings.ToLower(f.Name), lower) {
 				continue
@@ -315,7 +353,7 @@ func (s *Server) copyrightCompletions(lineUpTo string, snippetsSupported bool) [
 	if strings.Contains(strings.ToLower(lineUpTo), "license:") {
 		return stringsToCompletions(licenseValues(), protocol.CompletionItemKindValue)
 	}
-	return nil
+	return items
 }
 
 func licenseValues() []string {
@@ -364,6 +402,135 @@ func (s *Server) patchCompletions(lineUpTo, fullText string, snippetsSupported b
 	}
 	return items
 }
+
+// ---------------------------------------------------------------------------
+// Snippet templates (LSP snippet syntax + plain-text fallbacks)
+// ---------------------------------------------------------------------------
+
+// genericSnippetItem builds a single snippet completion item. When the
+// client supports snippets, the snippetText (with ${1:...} placeholders) is
+// used with InsertTextFormatSnippet. Otherwise, plainText is used so the
+// inserted text contains no placeholder markers.
+func genericSnippetItem(label, snippetText, plainText string, snippetsSupported bool) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindSnippet
+	detail := "Snippet"
+	if snippetsSupported {
+		format := protocol.InsertTextFormatSnippet
+		insert := snippetText
+		return []protocol.CompletionItem{{
+			Label:            label,
+			Kind:             &kind,
+			Detail:           &detail,
+			InsertText:       &insert,
+			InsertTextFormat: &format,
+		}}
+	}
+	insert := plainText
+	return []protocol.CompletionItem{{
+		Label:      label,
+		Kind:       &kind,
+		Detail:     &detail,
+		InsertText: &insert,
+	}}
+}
+
+// Changelog entry header snippet.
+const changelogEntrySnippet = `${1:package} (${2:version}) ${3:unstable}; urgency=${4:medium}
+
+  * ${5:changes}
+
+ -- ${6:Name} <${7:email}>  ${8:Weekday, DD Mon YYYY HH:MM:SS +0000}`
+
+const changelogEntryPlain = `package (version) unstable; urgency=medium
+
+  * changes
+
+ -- Name <email>  Weekday, DD Mon YYYY HH:MM:SS +0000`
+
+// Control source stanza snippet (source + one binary package).
+// \$ escapes literal $ in Debian substvars like ${shlibs:Depends}.
+const controlSourceStanzaSnippet = `Source: ${1:package}
+Section: ${2:utils}
+Priority: ${3:optional}
+Maintainer: ${4:Name <email>}
+Standards-Version: ${5:4.7.1}
+Homepage: ${6:https://}
+
+Package: ${7:package}
+Architecture: ${8:any}
+Depends: \${shlibs:Depends}, \${misc:Depends}
+Description: ${9:short description}
+ ${10:long description}`
+
+const controlSourceStanzaPlain = `Source: package
+Section: utils
+Priority: optional
+Maintainer: Name <email>
+Standards-Version: 4.7.1
+Homepage: https://
+
+Package: package
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: short description
+ long description`
+
+// Control binary package stanza snippet.
+const controlBinaryStanzaSnippet = `Package: ${1:package}
+Architecture: ${2:any}
+Depends: \${shlibs:Depends}, \${misc:Depends}
+Description: ${3:short description}
+ ${4:long description}`
+
+const controlBinaryStanzaPlain = `Package: package
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: short description
+ long description`
+
+// DEP-5 copyright header snippet.
+const copyrightHeaderSnippet = `Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: ${1:name}
+Upstream-Contact: ${2:Name <email>}
+Source: ${3:URL}
+
+Files: *
+Copyright: ${4:2024 Name <email>}
+License: ${5:GPL-3+}`
+
+const copyrightHeaderPlain = `Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: name
+Upstream-Contact: Name <email>
+Source: URL
+
+Files: *
+Copyright: 2024 Name <email>
+License: GPL-3+`
+
+// Watch file template snippet.
+const watchTemplateSnippet = `version=4
+${1:https://example.com/downloads/} .*/${2:package}-(\d[\d.]*)\.tar\.gz`
+
+const watchTemplatePlain = `version=4
+https://example.com/downloads/ .*/package-(\d[\d.]*)\.tar\.gz`
+
+// Minimal rules file template snippet.
+const rulesTemplateSnippet = `#!/usr/bin/make -f
+%:
+	dh $@
+`
+
+const rulesTemplatePlain = `#!/usr/bin/make -f
+%:
+	dh $@
+`
+
+// Rules override target snippet.
+const rulesOverrideSnippet = `override_dh_${1:auto_install}:
+	${2:}`
+
+const rulesOverridePlain = `override_dh_auto_install:
+	`
 
 // patchHeaderSnippet is a single comprehensive DEP-3 patch header, using LSP
 // snippet syntax. Continuation lines start with a single space per DEP-3
@@ -419,11 +586,17 @@ func patchSnippetItems(snippetsSupported bool) []protocol.CompletionItem {
 // watch completions
 // ---------------------------------------------------------------------------
 
-func (s *Server) watchCompletions(lineUpTo string) []protocol.CompletionItem {
-	if !debpkg.IsInOpts(lineUpTo) {
-		return nil
-	}
+func (s *Server) watchCompletions(lineUpTo, fullText string, snippetsSupported bool) []protocol.CompletionItem {
 	var items []protocol.CompletionItem
+
+	// Blank line + no version= line → offer watch template snippet.
+	if strings.TrimSpace(lineUpTo) == "" && !debpkg.HasWatchVersion(fullText) {
+		items = append(items, genericSnippetItem("Watch file template", watchTemplateSnippet, watchTemplatePlain, snippetsSupported)...)
+	}
+
+	if !debpkg.IsInOpts(lineUpTo) {
+		return items
+	}
 	for _, f := range debpkg.KnownWatchOptions {
 		kind := protocol.CompletionItemKindProperty
 		items = append(items, protocol.CompletionItem{

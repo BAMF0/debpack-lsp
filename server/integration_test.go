@@ -414,3 +414,259 @@ func TestIntegrationFileTypeUnknown(t *testing.T) {
 	}
 	_ = debpkg.FileTypeUnknown // ensure import is used
 }
+
+func TestIntegrationChangelogEntrySnippet(t *testing.T) {
+	s := New("test")
+	s.snippetsSupported = true
+	uri := protocol.DocumentUri("file:///home/user/pkg/debian/changelog")
+	text := "entry\n"
+
+	var diags []protocol.Diagnostic
+	ctx := fakeContext(&diags)
+	s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: text},
+	})
+
+	result, err := s.completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 0, Character: 5},
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := result.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []CompletionItem, got %T", result)
+	}
+	found := false
+	for _, item := range items {
+		if item.Label == "Changelog entry" {
+			found = true
+			if item.InsertTextFormat == nil ||
+				*item.InsertTextFormat != protocol.InsertTextFormatSnippet {
+				t.Error("Changelog entry snippet should have InsertTextFormat=Snippet")
+			}
+		}
+	}
+	if !found {
+		t.Error("expected 'Changelog entry' snippet in completions for 'entry' keyword")
+	}
+}
+
+func TestIntegrationControlSourceStanzaSnippet(t *testing.T) {
+	s := New("test")
+	s.snippetsSupported = true
+	uri := protocol.DocumentUri("file:///home/user/pkg/debian/control")
+	text := "\n"
+
+	var diags []protocol.Diagnostic
+	ctx := fakeContext(&diags)
+	s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: text},
+	})
+
+	result, err := s.completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 0, Character: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := result.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []CompletionItem, got %T", result)
+	}
+	found := false
+	for _, item := range items {
+		if item.Label == "Control source stanza" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Control source stanza' snippet for empty control file")
+	}
+}
+
+func TestIntegrationControlBinaryStanzaSnippet(t *testing.T) {
+	s := New("test")
+	s.snippetsSupported = true
+	uri := protocol.DocumentUri("file:///home/user/pkg/debian/control")
+	text := "Source: foo\nMaintainer: A <a@b.c>\nStandards-Version: 4.7.1\n\npackage\n"
+
+	var diags []protocol.Diagnostic
+	ctx := fakeContext(&diags)
+	s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: text},
+	})
+
+	result, err := s.completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 4, Character: 7},
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := result.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []CompletionItem, got %T", result)
+	}
+	found := false
+	for _, item := range items {
+		if item.Label == "Binary package stanza" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Binary package stanza' snippet for 'package' keyword")
+	}
+}
+
+func TestIntegrationCopyrightHeaderSnippet(t *testing.T) {
+	s := New("test")
+	s.snippetsSupported = true
+	uri := protocol.DocumentUri("file:///home/user/pkg/debian/copyright")
+	text := "\n"
+
+	var diags []protocol.Diagnostic
+	ctx := fakeContext(&diags)
+	s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: text},
+	})
+
+	result, err := s.completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 0, Character: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := result.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []CompletionItem, got %T", result)
+	}
+	found := false
+	for _, item := range items {
+		if item.Label == "DEP-5 copyright header" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'DEP-5 copyright header' snippet for empty copyright file")
+	}
+}
+
+func TestIntegrationWatchTemplateSnippet(t *testing.T) {
+	s := New("test")
+	s.snippetsSupported = true
+	uri := protocol.DocumentUri("file:///home/user/pkg/debian/watch")
+	text := "\n"
+
+	var diags []protocol.Diagnostic
+	ctx := fakeContext(&diags)
+	s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: text},
+	})
+
+	result, err := s.completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 0, Character: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := result.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []CompletionItem, got %T", result)
+	}
+	found := false
+	for _, item := range items {
+		if item.Label == "Watch file template" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Watch file template' snippet for empty watch file")
+	}
+}
+
+func TestIntegrationRulesTemplateSnippet(t *testing.T) {
+	s := New("test")
+	s.snippetsSupported = true
+	uri := protocol.DocumentUri("file:///home/user/pkg/debian/rules")
+	text := "\n"
+
+	var diags []protocol.Diagnostic
+	ctx := fakeContext(&diags)
+	s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: text},
+	})
+
+	result, err := s.completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 0, Character: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := result.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []CompletionItem, got %T", result)
+	}
+	found := false
+	for _, item := range items {
+		if item.Label == "Rules file template" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Rules file template' snippet for empty rules file")
+	}
+}
+
+func TestIntegrationRulesOverrideSnippet(t *testing.T) {
+	s := New("test")
+	s.snippetsSupported = true
+	uri := protocol.DocumentUri("file:///home/user/pkg/debian/rules")
+	text := "#!/usr/bin/make -f\n%:\n\tdh $@\n\noverride\n"
+
+	var diags []protocol.Diagnostic
+	ctx := fakeContext(&diags)
+	s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: text},
+	})
+
+	result, err := s.completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 4, Character: 8},
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := result.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []CompletionItem, got %T", result)
+	}
+	found := false
+	for _, item := range items {
+		if item.Label == "Override target" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Override target' snippet for 'override' keyword")
+	}
+}

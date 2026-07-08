@@ -105,3 +105,16 @@ func LookupField(name string) *ControlField {
 	}
 	return nil
 }
+
+// HasControlContent reports whether text contains at least one control
+// stanza with a Source: or Package: field. Used to decide whether to offer
+// the full source-stanza snippet in completions.
+func HasControlContent(text string) bool {
+	for _, line := range splitLines(text) {
+		lower := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(lower, "source:") || strings.HasPrefix(lower, "package:") {
+			return true
+		}
+	}
+	return false
+}

@@ -174,3 +174,79 @@ func TestChangelogUrgencyAtCursor(t *testing.T) {
 		}
 	}
 }
+
+func TestHasControlContent(t *testing.T) {
+	cases := []struct {
+		text string
+		want bool
+	}{
+		{"", false},
+		{"Source: foo\n", true},
+		{"Package: foo\n", true},
+		{"Section: utils\n", false},
+		{"source: foo\n", true},
+		{"# comment\nSource: foo\n", true},
+	}
+	for _, tc := range cases {
+		got := debpkg.HasControlContent(tc.text)
+		if got != tc.want {
+			t.Errorf("HasControlContent(%q) = %v, want %v", tc.text, got, tc.want)
+		}
+	}
+}
+
+func TestHasCopyrightFormat(t *testing.T) {
+	cases := []struct {
+		text string
+		want bool
+	}{
+		{"", false},
+		{"Format: https://www.debian.org/...\n", true},
+		{"format: https://...\n", true},
+		{"Files: *\n", false},
+	}
+	for _, tc := range cases {
+		got := debpkg.HasCopyrightFormat(tc.text)
+		if got != tc.want {
+			t.Errorf("HasCopyrightFormat(%q) = %v, want %v", tc.text, got, tc.want)
+		}
+	}
+}
+
+func TestHasWatchVersion(t *testing.T) {
+	cases := []struct {
+		text string
+		want bool
+	}{
+		{"", false},
+		{"version=4\n", true},
+		{"Version: 5\n", true},
+		{"# comment\n", false},
+		{"opts=foo\n", false},
+	}
+	for _, tc := range cases {
+		got := debpkg.HasWatchVersion(tc.text)
+		if got != tc.want {
+			t.Errorf("HasWatchVersion(%q) = %v, want %v", tc.text, got, tc.want)
+		}
+	}
+}
+
+func TestHasRulesShebang(t *testing.T) {
+	cases := []struct {
+		text string
+		want bool
+	}{
+		{"", false},
+		{"#!/usr/bin/make -f\n%:\n\tdh $@\n", true},
+		{"#!/usr/bin/make -sf\n", true},
+		{"%:\n\tdh $@\n", false},
+		{"# comment\n", false},
+	}
+	for _, tc := range cases {
+		got := debpkg.HasRulesShebang(tc.text)
+		if got != tc.want {
+			t.Errorf("HasRulesShebang(%q) = %v, want %v", tc.text, got, tc.want)
+		}
+	}
+}

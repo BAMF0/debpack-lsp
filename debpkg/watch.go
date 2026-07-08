@@ -40,3 +40,16 @@ func IsInOpts(lineUpToCursor string) bool {
 	lower := strings.ToLower(lineUpToCursor)
 	return strings.Contains(lower, "opts=")
 }
+
+// HasWatchVersion reports whether text contains a version= declaration,
+// indicating an existing watch file header. Used to decide whether to offer
+// the full watch template snippet in completions.
+func HasWatchVersion(text string) bool {
+	for _, line := range splitLines(text) {
+		lower := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(lower, "version=") || strings.HasPrefix(lower, "version:") {
+			return true
+		}
+	}
+	return false
+}

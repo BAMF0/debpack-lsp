@@ -58,3 +58,16 @@ func LookupCopyrightField(name string) *CopyrightField {
 	}
 	return nil
 }
+
+// HasCopyrightFormat reports whether text contains a Format: field,
+// indicating an existing DEP-5 copyright header. Used to decide whether
+// to offer the full copyright header snippet in completions.
+func HasCopyrightFormat(text string) bool {
+	for _, line := range splitLines(text) {
+		lower := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(lower, "format:") {
+			return true
+		}
+	}
+	return false
+}

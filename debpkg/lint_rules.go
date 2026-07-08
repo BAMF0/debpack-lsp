@@ -94,3 +94,15 @@ func hasDhDollar(text string) bool {
 	}
 	return false
 }
+
+// HasRulesShebang reports whether text starts with the required
+// "#!/usr/bin/make -f" shebang. Used to decide whether to offer the full
+// rules template snippet in completions.
+func HasRulesShebang(text string) bool {
+	lines := splitLines(text)
+	if len(lines) == 0 {
+		return false
+	}
+	first := strings.TrimSpace(lines[0])
+	return first == "#!/usr/bin/make -f" || first == "#!/usr/bin/make -sf"
+}
