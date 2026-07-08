@@ -73,11 +73,20 @@ local function attach(args)
     return
   end
 
+  -- Build capabilities. If cmp-nvim-lsp is installed, use its
+  -- default_capabilities() so LSP snippet completions (${1:...}) are
+  -- expanded by the user's snippet engine (e.g. LuaSnip via nvim-cmp).
+  local capabilities = vim.lsp.protocol.make_client_capabilities()
+  local ok, cmp_nvim_lsp = pcall(require, 'cmp_nvim_lsp')
+  if ok then
+    capabilities = cmp_nvim_lsp.default_capabilities(capabilities)
+  end
+
   vim.lsp.start({
     name    = "debpack-lsp",
     cmd     = { bin },
     root_dir = root,
-    capabilities = vim.lsp.protocol.make_client_capabilities(),
+    capabilities = capabilities,
     -- Pass the buffer so start() can check if a client is already running.
   }, { bufnr = buf, reuse_client = function(client, _)
     return client.name == "debpack-lsp" and client.config.root_dir == root
