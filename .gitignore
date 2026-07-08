@@ -1,1 +1,7 @@
 debpack-lsp
+vscode-ext/bin/
+vscode-ext/node_modules/
+vscode-ext/out/
+vscode-ext/*.vsix
+vscode-ext/LICENSE
+coverage.txt

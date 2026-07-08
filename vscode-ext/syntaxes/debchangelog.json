@@ -1,0 +1,25 @@
+{
+  "scopeName": "source.debchangelog",
+  "patterns": [
+    {
+      "name": "keyword.header.debian",
+      "match": "^\\S+\\s+\\([^)]+\\)\\s+\\S+;\\s+urgency=\\S+"
+    },
+    {
+      "name": "variable.parameter.debian",
+      "match": "urgency=\\w+"
+    },
+    {
+      "name": "markup.list.debian",
+      "match": "^\\s+[*+-]\\s"
+    },
+    {
+      "name": "comment.debian",
+      "match": "^\\s--\\s.*$"
+    },
+    {
+      "name": "string.unquoted.debian",
+      "match": "^\\s+.*$"
+    }
+  ]
+}

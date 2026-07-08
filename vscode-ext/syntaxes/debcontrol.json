@@ -1,0 +1,25 @@
+{
+  "scopeName": "source.debcontrol",
+  "patterns": [
+    {
+      "name": "comment.line.debian",
+      "match": "^#.*$"
+    },
+    {
+      "name": "support.type.debian",
+      "match": "^[A-Za-z][A-Za-z0-9-]*(?=:)"
+    },
+    {
+      "name": "keyword.operator.debian",
+      "match": "^[A-Za-z][A-Za-z0-9-]*:"
+    },
+    {
+      "name": "string.unquoted.debian",
+      "match": "^[A-Za-z][A-Za-z0-9-]*:\\s*(.*)$"
+    },
+    {
+      "name": "string.quoted.debian",
+      "match": "^\\s+.*$"
+    }
+  ]
+}

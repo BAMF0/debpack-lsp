@@ -1,0 +1,21 @@
+{
+  "scopeName": "source.debwatch",
+  "patterns": [
+    {
+      "name": "comment.line.debian",
+      "match": "^#.*$"
+    },
+    {
+      "name": "keyword.control.debian",
+      "match": "^version=\\d+$"
+    },
+    {
+      "name": "support.function.debian",
+      "match": "\\b(repacksuffix|repack|compression|component|pgpmode|filenamemangle|uversionmangle|dversionmangle|versionmangle|oversionmangle|pagemangle|downloadurlmangle|mode|pretty|gitmode|gitexport|gittagmangler|passive|searchmode|decompress|unzipopt)="
+    },
+    {
+      "name": "string.unquoted.debian",
+      "match": "^\\S+$"
+    }
+  ]
+}

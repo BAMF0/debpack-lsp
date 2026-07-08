@@ -1,0 +1,37 @@
+{
+  "scopeName": "source.debpatch",
+  "patterns": [
+    {
+      "name": "support.type.debian",
+      "match": "^[A-Za-z][A-Za-z0-9-]*(?=:)"
+    },
+    {
+      "name": "keyword.operator.debian",
+      "match": "^[A-Za-z][A-Za-z0-9-]*:"
+    },
+    {
+      "name": "string.unquoted.debian",
+      "match": "^\\s+.*$"
+    },
+    {
+      "name": "meta.diff.range.debian",
+      "match": "^@@.*@@$"
+    },
+    {
+      "name": "meta.diff.header.from-file.debian",
+      "match": "^---.*$"
+    },
+    {
+      "name": "meta.diff.header.to-file.debian",
+      "match": "^\\+\\+\\+.*$"
+    },
+    {
+      "name": "markup.inserted.debian",
+      "match": "^\\+.*$"
+    },
+    {
+      "name": "markup.deleted.debian",
+      "match": "^-.*$"
+    }
+  ]
+}

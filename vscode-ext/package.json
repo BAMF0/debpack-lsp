@@ -1,0 +1,120 @@
+{
+  "name": "debpack-lsp",
+  "displayName": "Debian Packaging LSP",
+  "description": "Language server for Debian packaging files (debian/control, changelog, rules, copyright, patches, watch)",
+  "version": "0.1.0",
+  "publisher": "BAMF0",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BAMF0/debpack-lsp"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets",
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:debcontrol",
+    "onLanguage:debchangelog",
+    "onLanguage:debcopyright",
+    "onLanguage:debpatch",
+    "onLanguage:debwatch",
+    "onLanguage:make"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "debcontrol",
+        "aliases": ["Debian Control", "debcontrol"],
+        "filenamePatterns": ["**/debian/control"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "debchangelog",
+        "aliases": ["Debian Changelog", "debchangelog"],
+        "filenamePatterns": ["**/debian/changelog"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "debcopyright",
+        "aliases": ["Debian Copyright", "debcopyright"],
+        "filenamePatterns": ["**/debian/copyright"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "debpatch",
+        "aliases": ["Debian Patch", "debpatch"],
+        "filenamePatterns": ["**/debian/patches/*"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "debwatch",
+        "aliases": ["Debian Watch", "debwatch"],
+        "filenamePatterns": ["**/debian/watch"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "debcontrol",
+        "scopeName": "source.debcontrol",
+        "path": "./syntaxes/debcontrol.json"
+      },
+      {
+        "language": "debchangelog",
+        "scopeName": "source.debchangelog",
+        "path": "./syntaxes/debchangelog.json"
+      },
+      {
+        "language": "debcopyright",
+        "scopeName": "source.debcopyright",
+        "path": "./syntaxes/debcopyright.json"
+      },
+      {
+        "language": "debpatch",
+        "scopeName": "source.debpatch",
+        "path": "./syntaxes/debpatch.json"
+      },
+      {
+        "language": "debwatch",
+        "scopeName": "source.debwatch",
+        "path": "./syntaxes/debwatch.json"
+      }
+    ],
+    "configuration": {
+      "title": "Debian Packaging LSP",
+      "properties": {
+        "debpack-lsp.binaryPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the `debpack-lsp` binary. If empty, the extension searches `$PATH` and then falls back to the bundled binary."
+        },
+        "debpack-lsp.logFile": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to a log file for debug output. Sets the `DEBPACK_LSP_LOG` environment variable. Leave empty to disable logging."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --watch",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.75.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}
