@@ -28,12 +28,15 @@ export function activate(context: vscode.ExtensionContext): void {
   const exec: Executable = {
     command: binaryPath,
     args: [],
+    // Always pass the full environment through so the server can find
+    // $HOME, $XDG_CACHE_HOME, etc. for cache lookups.
+    options: { env: { ...process.env } },
   };
 
   // Optional: enable debug logging via DEBPACK_LSP_LOG env var.
   const logFile = config.get<string>("logFile");
   if (logFile) {
-    exec.options = { env: { ...process.env, DEBPACK_LSP_LOG: logFile } };
+    exec.options!.env = { ...process.env, DEBPACK_LSP_LOG: logFile };
   }
 
   const serverOptions: ServerOptions = {

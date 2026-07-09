@@ -2,24 +2,78 @@
   "scopeName": "source.debchangelog",
   "patterns": [
     {
-      "name": "keyword.header.debian",
-      "match": "^\\S+\\s+\\([^)]+\\)\\s+\\S+;\\s+urgency=\\S+"
+      "comment": "Bug references: LP: #N and Closes: #N (matches anywhere, including continuation lines)",
+      "name": "keyword.other.debian",
+      "match": "(?i)\\b(?:lp|closes):\\s*#\\d+(?:,\\s*#\\d+)*"
     },
     {
-      "name": "variable.parameter.debian",
-      "match": "urgency=\\w+"
+      "comment": "Header: package (version) suite; urgency=value",
+      "match": "^(\\S+)(\\s+\\()([^)]+)(\\)\\s+)(\\S+)(;\\s+urgency=)(\\S+)$",
+      "captures": {
+        "1": { "name": "entity.name.type.debian" },
+        "3": { "name": "constant.numeric.debian" },
+        "5": { "name": "string.debian" },
+        "6": { "name": "keyword.control.debian" },
+        "7": { "name": "variable.constant.debian" }
+      }
     },
     {
-      "name": "markup.list.debian",
-      "match": "^\\s+[*+-]\\s"
+      "comment": "Trailer: -- Name <email>  Date",
+      "match": "^\\s+--\\s+.+$",
+      "name": "comment.debian"
     },
     {
-      "name": "comment.debian",
-      "match": "^\\s--\\s.*$"
+      "comment": "Top-level bullet:   * ... (entire line as a region)",
+      "begin": "^(\\s+)(\\*)(\\s+)",
+      "beginCaptures": { "2": { "name": "markup.list.bullet.debian" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#bug-refs" },
+        {
+          "comment": "Label: text ending with colon (excludes parens)",
+          "name": "entity.name.type.debian",
+          "match": "[A-Za-z0-9 /._-]+:"
+        }
+      ]
     },
     {
-      "name": "string.unquoted.debian",
-      "match": "^\\s+.*$"
+      "comment": "Sub-bullet:     - ... (entire line as a region)",
+      "begin": "^(\\s+)(-)(\\s+)",
+      "beginCaptures": { "2": { "name": "markup.list.numbered.debian" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#bug-refs" },
+        {
+          "comment": "Label: text ending with colon (excludes parens)",
+          "name": "entity.name.function.debian",
+          "match": "[A-Za-z0-9 /._-]+:"
+        }
+      ]
+    },
+    {
+      "comment": "Third-level:      + ... (entire line as a region)",
+      "begin": "^(\\s+)(\\+)(\\s+)",
+      "beginCaptures": { "2": { "name": "markup.list.numbered.debian" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#bug-refs" },
+        {
+          "comment": "Label: text ending with colon (excludes parens)",
+          "name": "entity.name.tag.debian",
+          "match": "[A-Za-z0-9 /._-]+:"
+        }
+      ]
     }
-  ]
+  ],
+  "repository": {
+    "bug-refs": {
+      "patterns": [
+        {
+          "comment": "LP: #N and Closes: #N (entire reference highlighted, including digits)",
+          "name": "keyword.other.debian",
+          "match": "(?i)\\b(?:lp|closes):\\s*#\\d+(?:,\\s*#\\d+)*"
+        }
+      ]
+    }
+  }
 }

@@ -14,10 +14,10 @@ func lintRules(text string) []Diag {
 	lines := splitLines(text)
 	var diags []Diag
 
-	// Shebang check (line 0).
+	// Shebang check (line 0). Allow optional space after "#!".
 	if len(lines) > 0 {
 		first := strings.TrimSpace(lines[0])
-		if first != "#!/usr/bin/make -f" && first != "#!/usr/bin/make -sf" {
+		if !isRulesShebang(first) {
 			diags = append(diags, Diag{
 				Line: 0, Col: 0, EndLine: 0, EndCol: len(lines[0]),
 				Severity: SeverityWarning,
@@ -85,6 +85,22 @@ func lintRules(text string) []Diag {
 	return diags
 }
 
+// isRulesShebang reports whether a line is a valid debian/rules shebang.
+// Allows an optional space after "#!" (e.g. "#! /usr/bin/make -f").
+func isRulesShebang(line string) bool {
+	for _, s := range []string{
+		"#!/usr/bin/make -f",
+		"#! /usr/bin/make -f",
+		"#!/usr/bin/make -sf",
+		"#! /usr/bin/make -sf",
+	} {
+		if line == s {
+			return true
+		}
+	}
+	return false
+}
+
 // hasDhDollar reports whether the rules file uses 'dh $@' anywhere.
 func hasDhDollar(text string) bool {
 	for _, line := range splitLines(text) {
@@ -103,6 +119,5 @@ func HasRulesShebang(text string) bool {
 	if len(lines) == 0 {
 		return false
 	}
-	first := strings.TrimSpace(lines[0])
-	return first == "#!/usr/bin/make -f" || first == "#!/usr/bin/make -sf"
+	return isRulesShebang(strings.TrimSpace(lines[0]))
 }

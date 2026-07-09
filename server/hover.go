@@ -73,7 +73,11 @@ func (s *Server) hoverBugRef(text, line string, offset int) (*protocol.Hover, er
 	}
 	bug := s.bugs.ByID(id)
 	if bug == nil {
-		md := fmt.Sprintf("**LP: #%d** — not found in local cache.\n\nRun `lpad sync` to refresh.", id)
+		md := fmt.Sprintf(
+			"**LP: #%d** — not found in local cache.\n\n"+
+				"The bug may be closed (lpad only caches open bugs) or assigned to a different project.\n\n"+
+				"[Open in browser](https://bugs.launchpad.net/bugs/%d) · Run `lpad sync` to refresh the cache.",
+			id, id)
 		return markdownHover(md), nil
 	}
 	return markdownHover(bugMarkdown(*bug)), nil

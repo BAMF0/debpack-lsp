@@ -19,7 +19,9 @@ install: build install-lua
 ## install-lua: copy the Neovim companion plugin to LUA_DIR
 install-lua:
 	install -Dm644 lua/debpack-lsp.lua $(LUA_DIR)/debpack-lsp.lua
+	install -Dm644 syntax/debchangelog.vim $(LUA_DIR)/../syntax/debchangelog.vim
 	@echo "Installed Neovim plugin to $(LUA_DIR)/debpack-lsp.lua"
+	@echo "Installed syntax file to $(LUA_DIR)/../syntax/debchangelog.vim"
 
 ## uninstall: remove the binary and Lua plugin
 uninstall:

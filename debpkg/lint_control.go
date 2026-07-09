@@ -183,6 +183,11 @@ func checkUbuntuMaintainer(s controlStanza, ctx LintContext) []Diag {
 	ln := s.fieldLine["maintainer"]
 	isUbuntuMaint := maintainer == ubuntuMaintainer
 
+	// Only flag the forward direction: Ubuntu package (version contains
+	// "ubuntu") whose Maintainer is NOT the Ubuntu Developers. The reverse
+	// (non-Ubuntu version but Ubuntu Maintainer) is intentionally not
+	// flagged because native Ubuntu packages use the Ubuntu Maintainer even
+	// though their version strings don't contain "ubuntu".
 	if ctx.IsUbuntu && !isUbuntuMaint {
 		return []Diag{{
 			Line: ln, Col: 0, EndLine: ln, EndCol: 0,
@@ -190,15 +195,8 @@ func checkUbuntuMaintainer(s controlStanza, ctx LintContext) []Diag {
 			Message: fmt.Sprintf(
 				"Ubuntu package (version contains 'ubuntu') but Maintainer is not %q", ubuntuMaintainer,
 			),
-		}}
-	}
-	if !ctx.IsUbuntu && isUbuntuMaint {
-		return []Diag{{
-			Line: ln, Col: 0, EndLine: ln, EndCol: 0,
-			Severity: SeverityWarning,
-			Message: fmt.Sprintf(
-				"non-Ubuntu package but Maintainer is %q; this is typically reserved for Ubuntu uploads", ubuntuMaintainer,
-			),
+			Code:   "control-ubuntu-maintainer",
+			Source: "control",
 		}}
 	}
 	return nil

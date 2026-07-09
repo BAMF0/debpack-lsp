@@ -326,14 +326,20 @@ Standards-Version: 4.6.2
 }
 
 func TestLintControl_NonUbuntuUbuntuMaintainer(t *testing.T) {
-	// Non-Ubuntu package (IsUbuntu=false) but Maintainer is the Ubuntu canonical.
+	// Non-Ubuntu package (IsUbuntu=false) but Maintainer is the Ubuntu
+	// canonical. This should NOT be flagged — native Ubuntu packages use
+	// the Ubuntu Maintainer even when the version doesn't contain "ubuntu".
 	text := `Source: curl
 Section: libs
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 Standards-Version: 4.6.2
 `
 	diags := lint(text, debpkg.FileTypeControl, debpkg.LintContext{IsUbuntu: false})
-	assertHasDiag(t, diags, debpkg.SeverityWarning, "Ubuntu")
+	for _, d := range diags {
+		if strings.Contains(d.Message, "non-Ubuntu package but Maintainer") {
+			t.Errorf("should not flag non-Ubuntu with Ubuntu Maintainer (native package): %s", d.Message)
+		}
+	}
 }
 
 func TestLintControl_UnknownField(t *testing.T) {

@@ -92,8 +92,16 @@ type cacheEnvelope struct {
 }
 
 func cachePath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".cache", "debpack-lsp", cacheFile)
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		// Fall back to $HOME/.cache if UserCacheDir fails (e.g. $HOME unset).
+		home, herr := os.UserHomeDir()
+		if herr != nil {
+			home = ""
+		}
+		dir = filepath.Join(home, ".cache")
+	}
+	return filepath.Join(dir, "debpack-lsp", cacheFile)
 }
 
 func loadCache() ([]Command, error) {

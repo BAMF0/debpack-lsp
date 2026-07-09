@@ -28,6 +28,9 @@ func writeLpadCache(t *testing.T, pkg string, raw []map[string]any) string {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	// Ensure os.UserCacheDir() falls back to $HOME/.cache, not a stale
+	// $XDG_CACHE_HOME from the test runner's environment.
+	t.Setenv("XDG_CACHE_HOME", "")
 	return home
 }
 
@@ -64,6 +67,7 @@ func TestStoreLoad(t *testing.T) {
 
 func TestStoreLoadMissingCache(t *testing.T) {
 	t.Setenv("HOME", t.TempDir()) // empty home — no cache
+	t.Setenv("XDG_CACHE_HOME", "")
 
 	store := bugs.NewStore()
 	store.Load("nonexistent-package")

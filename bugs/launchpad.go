@@ -33,8 +33,16 @@ type lpadCacheFile struct {
 }
 
 func (l *launchpadSource) cachePath(pkg string) string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".cache", "lpad", pkg+".json")
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		// Fall back to $HOME/.cache if UserCacheDir fails (e.g. $HOME unset).
+		home, herr := os.UserHomeDir()
+		if herr != nil {
+			home = ""
+		}
+		dir = filepath.Join(home, ".cache")
+	}
+	return filepath.Join(dir, "lpad", pkg+".json")
 }
 
 func (l *launchpadSource) load(pkg string) ([]lpadCacheBug, error) {
