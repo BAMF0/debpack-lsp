@@ -219,3 +219,100 @@ func TestHoverWatchVersion(t *testing.T) {
 		t.Errorf("hover content should mention version: %q", mc.Value)
 	}
 }
+
+func TestChangelogPPARefactor(t *testing.T) {
+	uri := "file:///home/user/pkg/debian/changelog"
+	lines := []string{
+		"rust-sudo-rs (0.2.14-1ubuntu1) stonking; urgency=medium",
+		"",
+		"  * Fix crash",
+		"",
+		" -- Maint <m@example.com>  Mon, 01 Jan 2024 00:00:00 +0000",
+	}
+	r := protocol.Range{
+		Start: protocol.Position{Line: 0, Character: 0},
+		End:   protocol.Position{Line: 0, Character: 50},
+	}
+
+	action, ok := changelogPPARefactor(uri, debpkg.FileTypeChangelog, lines, r)
+	if !ok {
+		t.Fatal("expected a refactor action")
+	}
+	if action.Kind == nil || *action.Kind != protocol.CodeActionKindRefactorRewrite {
+		t.Errorf("kind = %v, want refactor.rewrite", action.Kind)
+	}
+	if !strings.Contains(action.Title, "~ppa1") {
+		t.Errorf("title = %q, want ~ppa1", action.Title)
+	}
+	edits := action.Edit.Changes[uri]
+	if len(edits) != 1 {
+		t.Fatalf("expected 1 edit, got %d", len(edits))
+	}
+	if edits[0].NewText != "0.2.14-1ubuntu1~ppa1" {
+		t.Errorf("NewText = %q, want 0.2.14-1ubuntu1~ppa1", edits[0].NewText)
+	}
+	if edits[0].Range.Start.Character != 14 || edits[0].Range.End.Character != 29 {
+		t.Errorf("range = (%d, %d), want (14, 29)", edits[0].Range.Start.Character, edits[0].Range.End.Character)
+	}
+}
+
+func TestChangelogPPARefactorBumps(t *testing.T) {
+	uri := "file:///home/user/pkg/debian/changelog"
+	lines := []string{
+		"rust-sudo-rs (0.2.14-1ubuntu1~ppa1) stonking; urgency=medium",
+		"",
+		"  * Fix crash",
+		"",
+		" -- Maint <m@example.com>  Mon, 01 Jan 2024 00:00:00 +0000",
+	}
+	r := protocol.Range{
+		Start: protocol.Position{Line: 0, Character: 0},
+		End:   protocol.Position{Line: 0, Character: 60},
+	}
+
+	action, ok := changelogPPARefactor(uri, debpkg.FileTypeChangelog, lines, r)
+	if !ok {
+		t.Fatal("expected a refactor action")
+	}
+	edits := action.Edit.Changes[uri]
+	if len(edits) != 1 {
+		t.Fatalf("expected 1 edit, got %d", len(edits))
+	}
+	if edits[0].NewText != "0.2.14-1ubuntu1~ppa2" {
+		t.Errorf("NewText = %q, want 0.2.14-1ubuntu1~ppa2", edits[0].NewText)
+	}
+	if !strings.Contains(action.Title, "~ppa2") {
+		t.Errorf("title = %q, want ~ppa2", action.Title)
+	}
+}
+
+func TestChangelogPPARefactorOutOfRange(t *testing.T) {
+	uri := "file:///home/user/pkg/debian/changelog"
+	lines := []string{
+		"rust-sudo-rs (0.2.14-1ubuntu1) stonking; urgency=medium",
+		"",
+		"  * Fix crash",
+		"",
+		" -- Maint <m@example.com>  Mon, 01 Jan 2024 00:00:00 +0000",
+	}
+	// Range on line 2 (body bullet), not the header.
+	r := protocol.Range{
+		Start: protocol.Position{Line: 2, Character: 0},
+		End:   protocol.Position{Line: 2, Character: 20},
+	}
+	if _, ok := changelogPPARefactor(uri, debpkg.FileTypeChangelog, lines, r); ok {
+		t.Error("expected no action when range does not overlap header line")
+	}
+}
+
+func TestChangelogPPARefactorNotChangelog(t *testing.T) {
+	uri := "file:///home/user/pkg/debian/control"
+	lines := []string{"Source: foo"}
+	r := protocol.Range{
+		Start: protocol.Position{Line: 0, Character: 0},
+		End:   protocol.Position{Line: 0, Character: 10},
+	}
+	if _, ok := changelogPPARefactor(uri, debpkg.FileTypeControl, lines, r); ok {
+		t.Error("expected no action for non-changelog file")
+	}
+}

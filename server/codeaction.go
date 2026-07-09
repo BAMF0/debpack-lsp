@@ -47,7 +47,70 @@ func (s *Server) codeAction(ctx *glsp.Context, params *protocol.CodeActionParams
 		actions = append(actions, action)
 	}
 
+	// Non-diagnostic-driven refactor actions.
+	if ra, ok := changelogPPARefactor(uri, ft, lines, params.Range); ok {
+		actions = append(actions, ra)
+	}
+
 	return actions, nil
+}
+
+// changelogPPARefactor offers a "rewrite" code action that appends (or bumps)
+// a "~ppaN" suffix to the version of the topmost changelog entry, provided
+// the requested range overlaps that entry's header line.
+func changelogPPARefactor(uri string, ft debpkg.FileType, lines []string, r protocol.Range) (protocol.CodeAction, bool) {
+	if ft != debpkg.FileTypeChangelog {
+		return protocol.CodeAction{}, false
+	}
+
+	// Find the topmost header line in the document.
+	headerLine := -1
+	for i, l := range lines {
+		if _, _, _, ok := debpkg.ChangelogVersionSpan(l); ok {
+			headerLine = i
+			break
+		}
+	}
+	if headerLine < 0 {
+		return protocol.CodeAction{}, false
+	}
+
+	// Only offer when the requested range overlaps the header line.
+	if int(r.End.Line) < headerLine || int(r.Start.Line) > headerLine {
+		return protocol.CodeAction{}, false
+	}
+
+	old, startCol, endCol, ok := debpkg.ChangelogVersionSpan(lines[headerLine])
+	if !ok {
+		return protocol.CodeAction{}, false
+	}
+	new := debpkg.NextPPAVersion(old)
+	if new == old {
+		return protocol.CodeAction{}, false
+	}
+
+	var title string
+	if oldSuffix := debpkg.PPASuffix(old); oldSuffix != "" {
+		title = "Bump " + oldSuffix + " to " + debpkg.PPASuffix(new)
+	} else {
+		title = "Append " + debpkg.PPASuffix(new) + " to version"
+	}
+
+	kind := protocol.CodeActionKindRefactorRewrite
+	edit := protocol.TextEdit{
+		Range: protocol.Range{
+			Start: protocol.Position{Line: uint32(headerLine), Character: uint32(startCol)},
+			End:   protocol.Position{Line: uint32(headerLine), Character: uint32(endCol)},
+		},
+		NewText: new,
+	}
+	return protocol.CodeAction{
+		Title: title,
+		Kind:  &kind,
+		Edit: &protocol.WorkspaceEdit{
+			Changes: map[protocol.DocumentUri][]protocol.TextEdit{uri: {edit}},
+		},
+	}, true
 }
 
 // quickFix builds a CodeAction for a given diagnostic code. Returns

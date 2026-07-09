@@ -14,6 +14,50 @@ var firstLineRe = regexp.MustCompile(`^(\S+)\s+\(`)
 // firstVersionRe captures both the package name and the version string.
 var firstVersionRe = regexp.MustCompile(`^(\S+)\s+\(([^)]+)\)`)
 
+// ppaSuffixRe matches a trailing "~ppaN" suffix on a Debian version string.
+// Group 1 is the decimal number.
+var ppaSuffixRe = regexp.MustCompile(`~ppa(\d+)$`)
+
+// PPASuffix returns the trailing "~ppaN" suffix of version (e.g. "~ppa3"),
+// or "" when the version has no such suffix.
+func PPASuffix(version string) string {
+	loc := ppaSuffixRe.FindStringIndex(version)
+	if loc == nil {
+		return ""
+	}
+	return version[loc[0]:]
+}
+
+// NextPPAVersion returns the next PPA version for the given Debian version.
+// When version already ends in "~ppaN" the number is incremented
+// ("~ppa1" -> "~ppa2", "~ppa9" -> "~ppa10"). Otherwise "~ppa1" is appended.
+func NextPPAVersion(version string) string {
+	m := ppaSuffixRe.FindStringSubmatch(version)
+	if m == nil {
+		return version + "~ppa1"
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return version + "~ppa1"
+	}
+	n++
+	return version[:len(version)-len(m[1])] + strconv.Itoa(n)
+}
+
+// ChangelogVersionSpan returns the version string and its byte-column span
+// (between the parentheses) on a changelog header line. ok is false when the
+// line is not a recognised header. The returned columns are 0-indexed and
+// point at the version text itself (excluding the surrounding parentheses).
+func ChangelogVersionSpan(line string) (version string, startCol, endCol int, ok bool) {
+	loc := firstVersionRe.FindStringSubmatchIndex(line)
+	if loc == nil {
+		return "", 0, 0, false
+	}
+	// loc[4]:start and loc[5]:end are the byte offsets of group 2 (version).
+	start, end := loc[4], loc[5]
+	return line[start:end], start, end, true
+}
+
 // PackageFromChangelog extracts the source package name from the first line
 // of a debian/changelog file. Returns "" if not found.
 func PackageFromChangelog(text string) string {
